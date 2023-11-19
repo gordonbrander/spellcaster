@@ -1,5 +1,9 @@
 // @ts-check
 
+/** 
+ * @typedef {() => void} Cancel - call to cancel subscription
+ */
+
 /**
  * Create a one-to-many publisher
  * @template Value - the type of value to publish
@@ -30,7 +34,7 @@ export class Publisher {
    * Returns a "cancellable", a function that can be called to cancel
    * the subscription.
    * @param {(value: Value) => void} subscriber
-   * @returns {() => void}
+   * @returns {Cancel}
    */
   sub(subscriber) {
     this.#subscribers.add(subscriber)
@@ -39,10 +43,6 @@ export class Publisher {
     }
   }
 }
-
-/** 
- * @typedef {() => void} Cancel - call to cancel subscription
- */
 
 /**
  * @template Value
@@ -82,11 +82,14 @@ export class Publisher {
  * 
  * @template Value
  * @param {Value} initial - the initial value for the signal
- * @returns {[SignalValue<Value>, (value: Value) => void]}
+ * @returns {[SignalValue<Value>, (value: Value) => void]} a pair of signal
+ *   value and setter function
  */
 const signal = initial => {
+  /** @type {Publisher<Value>} */
   const subscribers = new Publisher()
 
+  /** @type {Value} */
   let value = initial
 
   /**
@@ -94,9 +97,6 @@ const signal = initial => {
    */
   const get = () => value
 
-  /**
-   * @type {(subscriber: (value: Value) => void) => Cancel}
-   */
   get.sub = subscriber => {
     subscriber(value)
     return subscribers.sub(subscriber)
@@ -374,8 +374,8 @@ const renderList = (
   }
 
   for (let child of removes) {
-    // Cancel subscription and remove
-    child.cancel()
+    // Cancel child subscription and remove
+    cancel(child)
     parent.removeChild(child)
   }
 
