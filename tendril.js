@@ -166,7 +166,7 @@ export const setCancel = (object, cancel) => {
  */
 export const cancel = cancellable => {
   let cancel = cancellable[__cancel__]
-  if (typeof cancel == 'function') {
+  if (typeof cancel === 'function') {
     cancel()
   }
 }
