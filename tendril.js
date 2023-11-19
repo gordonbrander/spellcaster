@@ -344,13 +344,16 @@ export const unknown = (state, msg) => {
 }
 
 /**
- * Render `state` signal to parent.
+ * Render a dynamic list of children on a parent.
  * @template Key
  * @template State
- * @param {SignalValue<Map<Key, State>>} states
+ * @param {SignalValue<Map<Key, State>>} states - a signal for a map of
+ *   children to render
  * @param {Element} parent
- * @param {(state: State) => (Element|string)} create
- * @returns {Cancel}
+ * @param {(state: State) => (Element|string)} create - a function to create
+ *   new children. Children are created once for each key. All updates to
+ *   children happen through signals passed to child.
+ * @returns {Cancel} - function to cancel future child renders.
  */
 export const list = (states, parent, create) => 
   states.sub(() => renderList(parent, states, create))
