@@ -256,12 +256,18 @@ const getId = x => x.id
  * Index an array to a `Map` by key, using `getKey`.
  * Maps retain order of insertion, making them an efficient data structure
  * for ordered items with IDs, when you're doing frequent lookups.
+ * @template Key
+ * @template Value
+ * @param {Array<Value>} values - an array of values with a unique key
+ * @param {(value: Value) => Key} getKey - a function to get a unique key from
+ *   the value
+ * @returns {Map<Key, Value>}
  */
-export const index = (items, getKey=getId) => {
+export const index = (values, getKey=getId) => {
   let indexed = new Map()
-  for (let item of items) {
-    let id = getId(item)
-    indexed.set(id, item)
+  for (let value of values) {
+    let key = getKey(value)
+    indexed.set(key, value)
   }
   return indexed
 }
