@@ -420,6 +420,8 @@ export const insertElementAt = (parent, element, index) => {
 let _cid = 0
 
 /**
- * Create an auto-incrementing client ID
+ * Create an auto-incrementing client ID.
+ * ID is unique for a given page refresh, but should not be persisted.
+ * @returns {string} a client ID
  */
 export const cid = () => `cid${_cid++}`
