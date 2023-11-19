@@ -39,13 +39,7 @@ import {
     let cancel = list(cards, deckEl, state => Card(state, send))
     return deckEl
   }
-  
-  const append = (array, value) => {
-    let copy = [...array]
-    copy.push(value)
-    return copy
-  }
-  
+    
   const App = (state, send) => {
     let appEl = el('div')
     appEl.classList.add('app')

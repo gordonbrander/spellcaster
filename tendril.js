@@ -263,7 +263,7 @@ export const index = (items, getKey=getId) => {
     let id = getId(item)
     indexed.set(id, item)
   }
-  return Object.freeze(indexed)
+  return indexed
 }
 
 /**
