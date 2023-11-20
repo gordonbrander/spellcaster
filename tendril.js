@@ -302,13 +302,24 @@ export const indexed = (items, getKey=getId) =>
  * @template State
  * @template Msg
  * @param {State} state 
- * @param {Array<(Promise<Msg>|Msg)>} effects 
+ * @param {Array<(Msg|Promise<Msg>)>} effects 
  * @returns {Transaction<State, Msg>}
  */
 export const next = (state, effects=[]) => ({state, effects})
 
 /**
  * Create a store
+ * A store is a repository of state that can be updated by sending messages.
+ * Store also manages asynchronous side effects, modeled as promises for more
+ * messages.
+ * 
+ * `init` and `update` both return transactions, an object containing a new
+ * `state`, as well as an array of promises representing side-effects.
+ * 
+ * Store is inspired by the the Elm Architecture pattern. It offers a
+ * predictable and centralized way to manage both application state and
+ * side-effects such as HTTP requests and database calls.
+ * 
  * @template State
  * @template Msg
  * @param {object} options
@@ -344,6 +355,15 @@ export const store = ({
   return [state, send]
 }
 
+/**
+ * Handle an unknown message by logging a warning and returning a transaction
+ * which does not change state.
+ * @template State
+ * @template Msg
+ * @param {State} state 
+ * @param {Msg} msg 
+ * @returns 
+ */
 export const unknown = (state, msg) => {
   console.warn('Unknown message type. Ignoring.', msg)
   return next(state)

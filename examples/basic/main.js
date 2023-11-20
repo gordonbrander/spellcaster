@@ -9,9 +9,9 @@ import {
   cid
 } from '../../tendril.js'
 
-const Action = {}
-Action.setCardText = (id, value) => ({type: 'setCardText', id, value})
-Action.append = value => ({type: 'append', value})
+const Msg = {}
+Msg.setCardText = (id, value) => ({type: 'setCardText', id, value})
+Msg.append = value => ({type: 'append', value})
 
 const el = tag => document.createElement(tag)
 
@@ -20,7 +20,7 @@ const Card = (state, send) => {
   cardEl.classList.add('card')
 
   cardEl.onclick = event => send(
-    Action.setCardText(state().id, `Now: ${Date.now()}`)
+    Msg.setCardText(state().id, `Now: ${Date.now()}`)
   )
 
   const contentEl = el('div')
@@ -51,7 +51,7 @@ const App = (state, send) => {
   let buttonEl = el('button')
   buttonEl.textContent = 'Append'
   buttonEl.onclick = () => send(
-    Action.append({
+    Msg.append({
       id: cid(),
       text: 'text'
     })
