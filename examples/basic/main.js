@@ -27,7 +27,7 @@ const Card = (state, send) => {
   contentEl.classList.add('card', 'content')
   cardEl.append(contentEl)
 
-  let text = debounce(map(state, state => state.text))
+  let text = map(state, state => state.text)
   text.sub(text => contentEl.textContent = text)
 
   return cardEl
@@ -126,6 +126,6 @@ const [state, send] = store({
   update
 })
 
-let appEl = App(state, send)
+let appEl = App(debounce(state), send)
 
 document.body.append(appEl)

@@ -204,7 +204,8 @@ export const computed = (dependencies, compute) => {
  * @returns {SignalValue<Result>}
  */
 export const fold = (upstream, step, initial) => {
-  const [downstream, setDownstream] = signal(step(initial, upstream()))
+  const value = upstream()
+  const [downstream, setDownstream] = signal(step(initial, value))
 
   const cancel = upstream.sub(
     value => setDownstream(step(downstream(), value))
@@ -232,7 +233,7 @@ export const map = (upstream, transform) =>
  * animation frame.
  */
 export const debounce = (upstream, subscribe) => {
-  const [downstream, setDownstream] = signal(upstream.value)
+  const [downstream, setDownstream] = signal(upstream())
 
   let state = downstream()
 
