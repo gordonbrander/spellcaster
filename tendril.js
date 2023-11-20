@@ -172,21 +172,21 @@ export const cancel = cancellable => {
 }
 
 /**
- * Create a computed signal by watching a group of signals
- * @example
- * let sum = computed([x, y], () => x.value + y.value)
+ * Sample values in a closure by watching a list of trigger signals
+ * @example sample the sum of x and y whenever either changes
+ * let sum = sample([x, y], () => x() + y())
  * @template Value
- * @param {Array<SignalValue<Value>>} dependencies
- * @param {() => Value} compute
+ * @param {Array<SignalValue<Value>>} triggers
+ * @param {() => Value} resample
  * @returns {SignalValue<Value>}
  */
-export const computed = (dependencies, compute) => {
-  const [downstream, setDownstream] = signal(compute())
+export const sample = (triggers, resample) => {
+  const [downstream, setDownstream] = signal(resample())
 
-  const recomputeDownstream = () => setDownstream(compute())
+  const resampleAndSetDownstream = () => setDownstream(resample())
 
-  let cancels = dependencies.map(
-    upstream => upstream.sub(recomputeDownstream)
+  let cancels = triggers.map(
+    upstream => upstream.sub(resampleAndSetDownstream)
   )
 
   downstream[__cancel__] = batchCancel(cancels)
@@ -229,10 +229,10 @@ export const map = (upstream, transform) =>
   fold(upstream, mapping(transform), null)
 
 /**
- * Debounce a signal, returning a new signal that updates only once per
+ * Throttle a signal, returning a new signal that updates only once per
  * animation frame.
  */
-export const debounce = (upstream, subscribe) => {
+export const throttle = (upstream, subscribe) => {
   const [downstream, setDownstream] = signal(upstream())
 
   let state = downstream()
