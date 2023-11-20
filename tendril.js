@@ -162,7 +162,7 @@ export const setCancel = (object, cancel) => {
 
 /**
  * Call cancel function on this object, if it has one
- * @param {*} cancellable 
+ * @param {Object} cancellable 
  */
 export const cancel = cancellable => {
   let cancel = cancellable[__cancel__]
