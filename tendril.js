@@ -130,7 +130,7 @@ export const just = value => {
  * @param {Array<() => void>} cancels
  * @returns {() => void}
  */
-export const batchCancel = cancels => {
+export const batchCancels = cancels => {
   let batch = new Set(cancels)
   return () => {
     for (let cancel of batch) {
@@ -171,8 +171,47 @@ export const cancel = cancellable => {
   }
 }
 
+export const microtask = () => Promise.resolve()
+export const animationFrame = () => new Promise(requestAnimationFrame)
+
 /**
- * Sample values in a closure by watching a list of trigger signals
+ * Batch tasks (thunks) at some batch interval, so that only the last-scheduled
+ * task will be run.
+ */
+class TaskBatcher {
+  #isScheduled = false
+  /** @type {() => Promise<any>} */
+  #schedule
+  /** @type {() => void} */
+  #task
+
+  /**
+   * Create a new task batcher.
+   * If no scheduler is provided, will schedule for next microtask.
+   * @param {() => Promise<any>} schedule
+   */
+  constructor(schedule=microtask) {
+    this.#schedule = schedule
+  }
+
+  /**
+   * Schedule a task to be run.
+   * Only the last task will be run per interval.
+   * @param {() => void} task
+   */
+  async schedule(task) {
+    this.#task = task
+    if (!this.#isScheduled) {
+      this.#isScheduled = true
+      await this.#schedule()
+      this.#task()
+      this.#isScheduled = false
+    }
+  }
+}
+
+/**
+ * Sample values via closure by watching a list of trigger signals.
  * @example sample the sum of x and y whenever either changes
  * let sum = sample([x, y], () => x() + y())
  * @template Value
@@ -185,30 +224,45 @@ export const sample = (triggers, resample) => {
 
   const resampleAndSetDownstream = () => setDownstream(resample())
 
+  // Batch samples to prevent the "diamond problem".
+  // Diamond problem: if multiple upstream triggers are derived from the
+  // same source, you'll get two events for every event on source.
+  // Example: Signal A has two signals derived from it: B and C.
+  // D samples on B and C. When A publishes, B and C both publish. D receives
+  // two events, one after the other, resulting in two different sample values,
+  // one after the other.
+  //
+  // Batching solves the problem by only sampling once per microtask, using
+  // on the last event for that microtask. You'll only sample once.
+  const batcher = new TaskBatcher()
+
+  const scheduleResampleAndSetDownstream = () =>
+    batcher.schedule(resampleAndSetDownstream)
+
   let cancels = triggers.map(
-    upstream => upstream.sub(resampleAndSetDownstream)
+    upstream => upstream.sub(scheduleResampleAndSetDownstream)
   )
 
-  downstream[__cancel__] = batchCancel(cancels)
+  setCancel(downstream, batchCancels(cancels))
 
   return downstream
 }
 
 /**
- * Fold (reduce) over a signal
+ * Throttle a signal, returning a new signal that updates only once per
+ * batch interval, as determined by `schedule`.
  * @template Value
- * @template Result
  * @param {SignalValue<Value>} upstream
- * @param {(result: Result, value: Value) => Result} step
- * @param {Result} initial
- * @returns {SignalValue<Result>}
+ * @param {() => Promise<any>} schedule - the scheduler to batch on
+ * @returns {SignalValue<Value>}
  */
-export const fold = (upstream, step, initial) => {
-  const value = upstream()
-  const [downstream, setDownstream] = signal(step(initial, value))
+export const throttle = (upstream, schedule=microtask) => {
+  const [downstream, setDownstream] = signal(upstream())
+
+  const batcher = new TaskBatcher(schedule)
 
   const cancel = upstream.sub(
-    value => setDownstream(step(downstream(), value))
+    value => batcher.schedule(() => setDownstream(value))
   )
 
   setCancel(downstream, cancel)
@@ -216,7 +270,82 @@ export const fold = (upstream, step, initial) => {
   return downstream
 }
 
-export const mapping = transform => (_, next) => transform(next)
+/**
+ * Throttle a signal, returning a new signal that updates only once per
+ * animation frame.
+ */
+export const animate = upstream => throttle(upstream, animationFrame)
+
+/**
+ * Reduced represents a sentinal for a completed operation.
+ * We use this as a sentinal for signal subscriptions to cancel themselves.
+ * @template Value
+ */
+class Finished {
+  /**
+   * Create a reduced value
+   * @param {Value} value
+   */
+  constructor(value) {
+    this.value = value
+  }
+}
+
+/**
+ * Create a reduced value.
+ * Reduced represents a sentinal for a completed reduction.
+ */
+export const finished = value => new Finished(value)
+
+/**
+ * Reduce (fold) over a signal, returning a new signal who's values are the
+ * intermediate results of that reduction.
+ * @template Value
+ * @template Result
+ * @param {SignalValue<Value>} upstream
+ * @param {(result: Result, value: Value) => (Result|Finished<Result>)} step
+ * @param {Result} initial
+ * @returns {SignalValue<Result>}
+ */
+export const scan = (step, upstream, initial) => {
+  const [downstream, setDownstream] = signal(initial)
+
+  const cancel = upstream.sub(
+    value => {
+      let next = step(downstream(), value)
+      if (next instanceof Finished) {
+        cancel()
+        setDownstream(next.value)
+      } else {
+        setDownstream(next)
+      }
+    }
+  )
+
+  setCancel(downstream, cancel)
+
+  return downstream
+}
+
+/**
+ * Transducers version of scan
+ */
+export const xscan = (xf, step, upstream, initial) =>
+  scan(xf(step), upstream, initial)
+
+/**
+ * Create a mapping reducer
+ */
+export const mapping = transform => step => (state, value) =>
+  step(state, transform(value))
+
+/**
+ * Create a filtering reducer
+ */
+export const filtering = predicate => step => (state, value) =>
+  predicate(value) ? step(state, value) : state
+
+const stepForward = (_, next) => next
 
 /**
  * @template Value
@@ -226,30 +355,7 @@ export const mapping = transform => (_, next) => transform(next)
  * @returns {SignalValue<MappedValue>}
  */
 export const map = (upstream, transform) =>
-  fold(upstream, mapping(transform), null)
-
-/**
- * Throttle a signal, returning a new signal that updates only once per
- * animation frame.
- */
-export const throttle = (upstream, subscribe) => {
-  const [downstream, setDownstream] = signal(upstream())
-
-  let state = downstream()
-
-  const cancel = upstream.sub(value => {
-    // Set the state for every value
-    state = value
-    // Request an animation frame for every value.
-    // Every request will fire, but because signal does not publish duplicate
-    // values, we'll get only one update per frame.
-    requestAnimationFrame(() => setDownstream(state))
-  })
-
-  setCancel(downstream, cancel)
-
-  return downstream
-}
+  xscan(mapping(transform), stepForward, upstream, null)
 
 const getId = x => x.id
 

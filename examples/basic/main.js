@@ -5,7 +5,7 @@ import {
   map,
   index,
   list,
-  debounce,
+  animate,
   cid
 } from '../../tendril.js'
 
@@ -126,6 +126,6 @@ const [state, send] = store({
   update
 })
 
-let appEl = App(debounce(state), send)
+let appEl = App(animate(state), send)
 
 document.body.append(appEl)
