@@ -319,7 +319,7 @@ export const complete = value => new Complete(value)
 
 /**
  * Reduce (fold) over a signal, returning a new signal who's values are the
- * intermediate results of that reduction.
+ * set at each step of the reduction.
  * @template Value
  * @template Result
  * @param {SignalValue<Value>} upstream
@@ -327,7 +327,7 @@ export const complete = value => new Complete(value)
  * @param {Result} initial
  * @returns {SignalValue<Result>}
  */
-export const scan = (step, upstream, initial) => {
+export const reductions = (step, upstream, initial) => {
   const [downstream, setDownstream] = signal(initial)
 
   const cancel = upstream.sub(
@@ -348,19 +348,31 @@ export const scan = (step, upstream, initial) => {
 }
 
 /**
- * Transducers version of scan
+ * Transducers version of reductions.
+ * 
+ * It is possible implement every other collection operation in terms of
+ * reduce. Transducers leverage this fact to provide every collection
+ * operation as a higher-level transformation of the stepping function.
+ * Benefits:
+ * - You can compose transducer functions
+ * - You don't need to create intermediate collections
+ * - Every collection operation can be had if you just implement reduce.
+ * 
+ * @see http://blog.cognitect.com/blog/2014/8/6/transducers-are-coming
+ * @see http://bendyworks.com/transducers-clojures-next-big-idea/
+ * @see https://www.cs.nott.ac.uk/~pszgmh/fold.pdf
  */
-export const xscan = (xf, step, upstream, initial) =>
-  scan(xf(step), upstream, initial)
+export const transductions = (xf, step, upstream, initial) =>
+  reductions(xf(step), upstream, initial)
 
 /**
- * Create a mapping reducer
+ * Create a mapping reducer function
  */
 export const mapping = transform => step => (state, value) =>
   step(state, transform(value))
 
 /**
- * Create a filtering reducer
+ * Create a filtering reducer function
  */
 export const filtering = predicate => step => (state, value) =>
   predicate(value) ? step(state, value) : state
@@ -375,7 +387,7 @@ const stepForward = (_, next) => next
  * @returns {SignalValue<MappedValue>}
  */
 export const map = (upstream, transform) =>
-  xscan(mapping(transform), stepForward, upstream, null)
+  transductions(mapping(transform), stepForward, upstream, null)
 
 const getId = x => x.id
 
