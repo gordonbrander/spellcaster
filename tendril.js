@@ -171,7 +171,14 @@ export const cancel = cancellable => {
   }
 }
 
+/**
+ * @returns {Promise<void>} A promise for the next microtask
+ */
 export const microtask = () => Promise.resolve()
+
+/**
+ * @returns {Promise<Number>} A promise for the next animation frame
+ */
 export const animationFrame = () => new Promise(requestAnimationFrame)
 
 /**
@@ -212,14 +219,21 @@ class TaskBatcher {
 
 /**
  * Sample values via closure by watching a list of trigger signals.
+ * Samples are throttled using `schedule`, which returns a promise for
+ * an interval on which we should sample.
  * @example sample the sum of x and y whenever either changes
  * let sum = sample([x, y], () => x() + y())
  * @template Value
  * @param {Array<SignalValue<Value>>} triggers
+ * @param {() => Promise<any>} schedule
  * @param {() => Value} resample
  * @returns {SignalValue<Value>}
  */
-export const sample = (triggers, resample) => {
+export const sampleOn = (
+  triggers,
+  schedule,
+  resample
+) => {
   const [downstream, setDownstream] = signal(resample())
 
   const resampleAndSetDownstream = () => setDownstream(resample())
@@ -234,7 +248,7 @@ export const sample = (triggers, resample) => {
   //
   // Batching solves the problem by only sampling once per microtask, using
   // on the last event for that microtask. You'll only sample once.
-  const batcher = new TaskBatcher()
+  const batcher = new TaskBatcher(schedule)
 
   const scheduleResampleAndSetDownstream = () =>
     batcher.schedule(resampleAndSetDownstream)
@@ -249,39 +263,45 @@ export const sample = (triggers, resample) => {
 }
 
 /**
- * Throttle a signal, returning a new signal that updates only once per
- * batch interval, as determined by `schedule`.
+ * Sample values via closure by watching a list of trigger signals.
+ * Samples are throttled to one-per-event-loop-tick.
  * @template Value
- * @param {SignalValue<Value>} upstream
- * @param {() => Promise<any>} schedule - the scheduler to batch on
+ * @param {Array<SignalValue<Value>>} triggers
+ * @param {() => Value} resample
  * @returns {SignalValue<Value>}
  */
-export const throttle = (upstream, schedule=microtask) => {
-  const [downstream, setDownstream] = signal(upstream())
+export const sample = (triggers, resample) => sampleOn(
+  triggers,
+  microtask,
+  resample
+)
 
-  const batcher = new TaskBatcher(schedule)
-
-  const cancel = upstream.sub(
-    value => batcher.schedule(() => setDownstream(value))
-  )
-
-  setCancel(downstream, cancel)
-
-  return downstream
-}
+/**
+ * Throttle a signal, returning a new signal that updates only once per
+ * Samples are throttled to one-per-event-loop-tick.
+ * @template Value
+ * @param {SignalValue<Value>} upstream
+ * @returns {SignalValue<Value>}
+ */
+export const throttle = upstream =>
+  sample([upstream], upstream)
 
 /**
  * Throttle a signal, returning a new signal that updates only once per
  * animation frame.
  */
-export const animate = upstream => throttle(upstream, animationFrame)
+export const animate = upstream => sampleOn(
+  [upstream],
+  animationFrame,
+  upstream,
+)
 
 /**
  * Reduced represents a sentinal for a completed operation.
  * We use this as a sentinal for signal subscriptions to cancel themselves.
  * @template Value
  */
-class Finished {
+class Complete {
   /**
    * Create a reduced value
    * @param {Value} value
@@ -295,7 +315,7 @@ class Finished {
  * Create a reduced value.
  * Reduced represents a sentinal for a completed reduction.
  */
-export const finished = value => new Finished(value)
+export const complete = value => new Complete(value)
 
 /**
  * Reduce (fold) over a signal, returning a new signal who's values are the
@@ -303,7 +323,7 @@ export const finished = value => new Finished(value)
  * @template Value
  * @template Result
  * @param {SignalValue<Value>} upstream
- * @param {(result: Result, value: Value) => (Result|Finished<Result>)} step
+ * @param {(result: Result, value: Value) => (Result|Complete<Result>)} step
  * @param {Result} initial
  * @returns {SignalValue<Result>}
  */
@@ -313,7 +333,7 @@ export const scan = (step, upstream, initial) => {
   const cancel = upstream.sub(
     value => {
       let next = step(downstream(), value)
-      if (next instanceof Finished) {
+      if (next instanceof Complete) {
         cancel()
         setDownstream(next.value)
       } else {
