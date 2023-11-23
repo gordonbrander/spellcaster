@@ -5,55 +5,15 @@
  */
 
 /**
- * Create a one-to-many publisher
- * @template Value - the type of value to publish
- */
-export class Publisher {
-  /** @type {Set<(Value) => void>} */
-  #subscribers = new Set()
-
-  /**
-   * Remove all subscribers
-   */
-  clear() {
-    this.#subscribers.clear()
-  }
-
-  /**
-   * Publish a value to subscribers
-   * @param {Value} value - the value to publish
-   */
-  pub(value) {
-    for (let subscriber of this.#subscribers) {
-      subscriber(value)
-    }
-  }
-
-  /**
-   * Subscribe to future updates
-   * Returns a "cancellable", a function that can be called to cancel
-   * the subscription.
-   * @param {(value: Value) => void} subscriber
-   * @returns {Cancel}
-   */
-  sub(subscriber) {
-    this.#subscribers.add(subscriber)
-    return () => {
-      this.#subscribers.delete(subscriber)
-    }
-  }
-}
-
-/**
  * @template Value
- * @typedef {() => Value} Peekable
+ * @typedef {() => Value} Peekable - get signal's current value
  */
 
 /**
  * @template Value
  * @typedef {Object} Subscribable
  * @property {(subscriber: (value: Value) => void) => Cancel} sub -
- *   subscribe to this value.
+ *   subscribe to this signal.
  */
 
 /**
@@ -85,28 +45,31 @@ export class Publisher {
  * @returns {[SignalValue<Value>, (value: Value) => void]} a pair of signal
  *   value and setter function
  */
-const signal = initial => {
-  /** @type {Publisher<Value>} */
-  const subscribers = new Publisher()
+export const signal = initial => {
+  /** @type {Set<((value: Value) => void)>} */
+  const subscribers = new Set()
 
   /** @type {Value} */
   let value = initial
 
-  /**
-   * @type {SignalValue<Value>}
-   */
+  /** @type {SignalValue<Value>} */
   const get = () => value
 
   get.sub = subscriber => {
     subscriber(value)
-    return subscribers.sub(subscriber)
+    subscribers.add(subscriber)
+    return () => {
+      subscribers.delete(subscriber)
+    }
   }
 
   /** @type {(value: Value) => void} */
   const set = next => {
     if (value !== next) {
       value = next
-      subscribers.pub(value)
+      for (let subscriber of subscribers) {
+        subscriber(value)
+      }
     }
   }
 
@@ -120,15 +83,15 @@ const signal = initial => {
  * @returns {SignalValue<Value>}
  */
 export const just = value => {
-  const [$value, _] = signal(value)
-  return $value
+  const [output, _] = signal(value)
+  return output
 }
 
 /**
  * Batch cancels together, returning a cancel function that runs them all.
  * Cancels are run once and then removed.
- * @param {Array<() => void>} cancels
- * @returns {() => void}
+ * @param {Array<Cancel>} cancels
+ * @returns {Cancel}
  */
 export const batchCancels = cancels => {
   let batch = new Set(cancels)
@@ -182,42 +145,6 @@ export const microtask = () => Promise.resolve()
 export const animationFrame = () => new Promise(requestAnimationFrame)
 
 /**
- * Batch tasks (thunks) at some batch interval, so that only the last-scheduled
- * task will be run.
- */
-class TaskBatcher {
-  #isScheduled = false
-  /** @type {() => Promise<any>} */
-  #schedule
-  /** @type {() => void} */
-  #task
-
-  /**
-   * Create a new task batcher.
-   * If no scheduler is provided, will schedule for next microtask.
-   * @param {() => Promise<any>} schedule
-   */
-  constructor(schedule=microtask) {
-    this.#schedule = schedule
-  }
-
-  /**
-   * Schedule a task to be run.
-   * Only the last task will be run per interval.
-   * @param {() => void} task
-   */
-  async schedule(task) {
-    this.#task = task
-    if (!this.#isScheduled) {
-      this.#isScheduled = true
-      await this.#schedule()
-      this.#task()
-      this.#isScheduled = false
-    }
-  }
-}
-
-/**
  * Sample values via closure by watching a list of trigger signals.
  * Samples are throttled using `schedule`, which returns a promise for
  * an interval on which we should sample.
@@ -236,8 +163,6 @@ export const sampleOn = (
 ) => {
   const [downstream, setDownstream] = signal(resample())
 
-  const resampleAndSetDownstream = () => setDownstream(resample())
-
   // Batch samples to prevent the "diamond problem".
   // Diamond problem: if multiple upstream triggers are derived from the
   // same source, you'll get two events for every event on source.
@@ -248,12 +173,17 @@ export const sampleOn = (
   //
   // Batching solves the problem by only sampling once per microtask, using
   // on the last event for that microtask. You'll only sample once.
-  const batcher = new TaskBatcher(schedule)
+  let isScheduled = false
+  const scheduleResampleAndSetDownstream = async () => {
+    if (!isScheduled) {
+      isScheduled = true
+      await schedule()
+      setDownstream(resample())
+      isScheduled = false
+    }
+  }  
 
-  const scheduleResampleAndSetDownstream = () =>
-    batcher.schedule(resampleAndSetDownstream)
-
-  let cancels = triggers.map(
+  const cancels = triggers.map(
     upstream => upstream.sub(scheduleResampleAndSetDownstream)
   )
 
@@ -283,8 +213,11 @@ export const sample = (triggers, resample) => sampleOn(
  * @param {SignalValue<Value>} upstream
  * @returns {SignalValue<Value>}
  */
-export const throttle = upstream =>
-  sample([upstream], upstream)
+export const throttle = upstream => sampleOn(
+  [upstream],
+  microtask,
+  upstream
+)
 
 /**
  * Throttle a signal, returning a new signal that updates only once per
@@ -371,15 +304,9 @@ export const transductions = (xf, step, upstream, initial) =>
 export const mapping = transform => step => (state, value) =>
   step(state, transform(value))
 
-/**
- * Create a filtering reducer function
- */
-export const filtering = predicate => step => (state, value) =>
-  predicate(value) ? step(state, value) : state
-
 const stepForward = (_, next) => next
 
-/**
+  /**
  * @template Value
  * @template MappedValue
  * @param {SignalValue<Value>} upstream
@@ -388,6 +315,12 @@ const stepForward = (_, next) => next
  */
 export const map = (upstream, transform) =>
   transductions(mapping(transform), stepForward, upstream, null)
+
+/**
+ * Create a filtering reducer function
+ */
+export const filtering = predicate => step => (state, value) =>
+  predicate(value) ? step(state, value) : state
 
 const getId = x => x.id
 
@@ -476,19 +409,24 @@ export const store = ({
   let {state: initial, effects} = init()
   const [state, setState] = signal(initial)
 
-  const runEffects = effects => {
-    for (let effect of effects) {
-      effect.then(send)
-    }
-  }
+  /**
+   * @param {Promise<Msg>|Msg} effect
+   */
+  const run = async (effect) => send(await effect)
 
+  /**
+   * 
+   * @param {Msg} msg 
+   */
   const send = msg => {
     if (debug) {
       console.debug("store.msg", msg)
     }
     let {state: next, effects} = update(state(), msg)
     setState(next)
-    runEffects(effects)
+    for (let effect of effects) {
+      run(effect)
+    }
   }
 
   return [state, send]
