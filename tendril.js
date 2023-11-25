@@ -1,7 +1,8 @@
 // @ts-check
 
 /** 
- * @typedef {() => void} Cancel - call to cancel subscription
+ * @typedef {() => void} Cancel - a zero-argument function you can call to
+ *   cancel subscription. Expected to be idempotent.
  */
 
 /**
@@ -11,96 +12,100 @@
 
 /**
  * @template Value
+ * @typedef {(value: Value) => void} Subscriber - a callback function
+ *   that takes a single argument
+ */
+
+/**
+ * @template Value
  * @typedef {Object} Subscribable
- * @property {(subscriber: (value: Value) => void) => Cancel} sub -
- *   subscribe to this signal.
+ * @property {(subscriber: Subscriber<Value>) => Cancel} sub - subscribe
+ *   to future values, returning a function to cancel the subscription.
  */
 
 /**
  * @template Value
- * @typedef {Peekable<Value> & Subscribable<Value>} SignalValue
+ * @typedef {Peekable<Value> & Subscribable<Value>} SignalValue - the read-only
+ *   portion of a signal
  */
 
 /**
  * @template Value
- * @typedef {[SignalValue<Value>, (value: Value) => void]} Signal
+ * @satisfies {Subscribable<Value>}
  */
+class Observable {
+  /** @type {Set<Subscriber<Value>>} */
+  #subscribers = new Set()
+
+  /**
+   * Subscribe to this observable
+   * @param {Subscriber<Value>} subscriber callback
+   * @returns {Cancel} - call to cancel subscription
+   */
+  sub(subscriber) {
+    this.#subscribers.add(subscriber)
+    return () => {
+      this.#subscribers.delete(subscriber)
+    }
+  }
+
+  /**
+   * Publish a new value
+   * @param {Value} value
+   */
+  pub(value) {
+    for (let subscriber of this.#subscribers) {
+      subscriber(value)
+    }
+  }
+}
 
 /**
- * Signal - a reactive container for values
- * 
- * @example Create a signal
- * let [value, setValue] = signal(0)
- * 
- * @example Get the current signal value
- * value()
- * 
- * @example Subscribe to current and future values
- * let cancel = value.sub(value => {
- *   // Do something
- * })
- * 
+ * Create a new signal, using a stepping function and an initial state.
  * @template Value
- * @param {Value} initial - the initial value for the signal
- * @returns {[SignalValue<Value>, (value: Value) => void]} a pair of signal
- *   value and setter function
+ * @param {Value} initial
+ * @returns {[SignalValue<Value>, (value: Value) => void]}
  */
 export const signal = initial => {
-  /** @type {Set<((value: Value) => void)>} */
-  const subscribers = new Set()
+  const subscribers = new Observable()
 
-  /** @type {Value} */
   let value = initial
 
-  /** @type {SignalValue<Value>} */
-  const get = () => value
-
-  get.sub = subscriber => {
-    subscriber(value)
-    subscribers.add(subscriber)
-    return () => {
-      subscribers.delete(subscriber)
-    }
-  }
-
-  /** @type {(value: Value) => void} */
-  const set = next => {
+  const setValue = next => {
     if (value !== next) {
       value = next
-      for (let subscriber of subscribers) {
-        subscriber(value)
-      }
+      subscribers.pub(value)
     }
   }
 
-  return [get, set]
-}
+  const getValue = () => value
 
-/**
- * Create a signal for a value that never changes
- * @template Value
- * @param {Value} value 
- * @returns {SignalValue<Value>}
- */
-export const just = value => {
-  const [output, _] = signal(value)
-  return output
-}
-
-/**
- * Batch cancels together, returning a cancel function that runs them all.
- * Cancels are run once and then removed.
- * @param {Array<Cancel>} cancels
- * @returns {Cancel}
- */
-export const batchCancels = cancels => {
-  let batch = new Set(cancels)
-  return () => {
-    for (let cancel of batch) {
-      cancel()
-    }
-    batch.clear()
+  getValue.sub = subscriber => {
+    subscriber(value)
+    return subscribers.sub(subscriber)
   }
+
+  return [getValue, setValue]
+}
+
+export const useSignal = signal
+
+/**
+ * Create a reducer-style signal.
+ * Signal may be updated by sending values to the returned setter. When you
+ * set a new value, step is called with the current signal state and
+ * the new value, and returns the next state.
+ * @template State, Value
+ * @param {(state: State, value: Value) => State} step
+ * @param {State} initial
+ * @returns {[SignalValue<State>, (value: Value) => void]}
+ */
+export const useReducer = (step, initial) => {
+  const [state, setState] = signal(initial)
+  const advanceState = value => setState(
+    step(state(), value)
+  )
+  return [state, advanceState]
 }
 
 /**
@@ -135,14 +140,141 @@ export const cancel = cancellable => {
 }
 
 /**
- * @returns {Promise<void>} A promise for the next microtask
+ * Batch cancels together, returning a cancel function that runs them all.
+ * Cancels are run once and then removed.
+ * @param {Array<Cancel>} cancels
+ * @returns {Cancel}
  */
-export const microtask = () => Promise.resolve()
+export const batchCancels = cancels => {
+  let batch = new Set(cancels)
+  return () => {
+    for (let cancel of batch) {
+      cancel()
+    }
+    batch.clear()
+  }
+}
 
 /**
- * @returns {Promise<Number>} A promise for the next animation frame
+ * Reduced is a sentinal for a completed reduction.
+ * Returning reduced from a stepping function will cause `reductions` to
+ * automatically cancel its upstream subscription, treating the value of
+ * reduced as the final value of the reduction.
+ * @template Value
  */
-export const animationFrame = () => new Promise(requestAnimationFrame)
+class Reduced {
+  /**
+   * Create a reduced value
+   * @param {Value} value
+   */
+  constructor(value) {
+    this.value = value
+  }
+}
+
+/**
+ * @template State, Value
+ * @typedef {(state: State, value: Value) => (State|Reduced<State>)} Step
+ *   a stepping function that can be used for `reduce()`
+ */
+
+/**
+ * Create a new signal by reducing over any subscribable value
+ * @template State, Value
+ * @param {Step<State, Value>} step
+ * @param {Subscribable<Value>} subscribable
+ * @param {State} initial
+ * @returns {SignalValue<State>}
+ */
+export const reductions = (step, subscribable, initial) => {
+  const [state, setState] = signal(initial)
+  const cancel = subscribable.sub(value => {
+    let next = step(state(), value)
+    // If reduction sent a complete sentinal value, then cancel our subscription
+    // and set the completed value as the last published state.
+    if (next instanceof Reduced) {
+      cancel()
+      setState(next.value)
+      return
+    }
+    setState(next)
+  })
+  setCancel(state, cancel)
+  return state
+}
+
+/**
+ * Transduers over any subscribable value.
+ * Inspired by Clojure's tranducers, which implement every collection
+ * manipulation function as transformations of the stepping function passed
+ * to reduce.
+ * Benefits:
+ * - You can compose transducer functions
+ * - You don't need to create intermediate collections
+ * - Every collection operation becomes available if you just implement reduce.
+ * @see http://blog.cognitect.com/blog/2014/8/6/transducers-are-coming
+ * @see http://bendyworks.com/transducers-clojures-next-big-idea/
+ * @see https://www.cs.nott.ac.uk/~pszgmh/fold.pdf
+ * @template A, B, C, D
+ * @param {(step: Step<C, D>) => Step<A, B>} xf
+ * @param {Step<C, D>} step
+ * @param {Subscribable<B>} subscribable
+ * @param {A} initial
+ * @returns {SignalValue<A>}
+ */
+export const transductions = (xf, step, subscribable, initial) =>
+  reductions(xf(step), subscribable, initial)
+
+/**
+ * Create a mapping transducer function
+ * @template State, Input, Output
+ * @param {(input: Input) => Output} transform
+ * @returns {(step: Step<State, Output>) => Step<State, Input>}
+ */
+export const mapping = transform => step => (state, value) =>
+  step(state, transform(value))
+
+/**
+ * Create a filtering transducer function
+ * @template State, Value
+ * @param {(input: Value) => Boolean} predicate
+ * @returns {(step: Step<State, Value>) => Step<State, Value>}
+ */
+export const filtering = predicate => step => (state, value) =>
+  predicate(value) ? step(state, value) : state
+
+/**
+ * Create a take-while transducer function that will take values until the
+ * predicate returns false.
+ * @template State, Value
+ * @param {(input: Value) => Boolean} predicate
+ * @returns {(step: Step<State|Reduced<State>, Value>) => Step<(State|Reduced<State>), Value>}
+ */
+export const takingWhile = predicate => step => (state, value) =>
+  predicate(value) ? step(state, value) : new Reduced(state)
+
+/**
+ * Step value forward, ignoring state
+ * @template Value
+ * @param {*} _
+ * @param {Value} value
+ * @returns {Value}
+ */
+const stepForward = (_, value) => value
+
+/**
+ * Map a signal, observable, or any subscribable value
+ * Returns a new signal for the mapped value
+ * @template State
+ * @template Value
+ * @param {Subscribable<Value>} upstream
+ * @param {(value: Value) => State} transform
+ * @returns {SignalValue<State>}
+ */
+export const map = (upstream, transform) => {
+  let xf = mapping(transform)
+  return transductions(xf, stepForward, upstream, null)
+}
 
 /**
  * Sample values via closure by watching a list of trigger signals.
@@ -161,7 +293,7 @@ export const sampleOn = (
   schedule,
   resample
 ) => {
-  const [downstream, setDownstream] = signal(resample())
+  let [downstream, setDownstream] = signal(resample())
 
   // Batch samples to prevent the "diamond problem".
   // Diamond problem: if multiple upstream triggers are derived from the
@@ -174,23 +306,33 @@ export const sampleOn = (
   // Batching solves the problem by only sampling once per microtask, using
   // on the last event for that microtask. You'll only sample once.
   let isScheduled = false
-  const scheduleResampleAndSetDownstream = async () => {
+  const scheduleResample = async () => {
     if (!isScheduled) {
       isScheduled = true
       await schedule()
       setDownstream(resample())
       isScheduled = false
     }
-  }  
+  }
 
-  const cancels = triggers.map(
-    upstream => upstream.sub(scheduleResampleAndSetDownstream)
+  const cancel = batchCancels(
+    triggers.map(upstream => upstream.sub(scheduleResample))
   )
 
-  setCancel(downstream, batchCancels(cancels))
+  setCancel(downstream, cancel)
 
   return downstream
 }
+
+/**
+ * @returns {Promise<void>} A promise for the next microtask
+ */
+export const microtask = () => Promise.resolve()
+
+/**
+ * @returns {Promise<Number>} A promise for the next animation frame
+ */
+export const animationFrame = () => new Promise(requestAnimationFrame)
 
 /**
  * Sample values via closure by watching a list of trigger signals.
@@ -222,6 +364,9 @@ export const throttle = upstream => sampleOn(
 /**
  * Throttle a signal, returning a new signal that updates only once per
  * animation frame.
+ * @template Value
+ * @param {SignalValue<Value>} upstream
+ * @returns {SignalValue<Value>}
  */
 export const animate = upstream => sampleOn(
   [upstream],
@@ -230,99 +375,9 @@ export const animate = upstream => sampleOn(
 )
 
 /**
- * Reduced represents a sentinal for a completed operation.
- * We use this as a sentinal for signal subscriptions to cancel themselves.
- * @template Value
+ * Get object id property
  */
-class Complete {
-  /**
-   * Create a reduced value
-   * @param {Value} value
-   */
-  constructor(value) {
-    this.value = value
-  }
-}
-
-/**
- * Create a reduced value.
- * Reduced represents a sentinal for a completed reduction.
- */
-export const complete = value => new Complete(value)
-
-/**
- * Reduce (fold) over a signal, returning a new signal who's values are the
- * set at each step of the reduction.
- * @template Value
- * @template Result
- * @param {SignalValue<Value>} upstream
- * @param {(result: Result, value: Value) => (Result|Complete<Result>)} step
- * @param {Result} initial
- * @returns {SignalValue<Result>}
- */
-export const reductions = (step, upstream, initial) => {
-  const [downstream, setDownstream] = signal(initial)
-
-  const cancel = upstream.sub(
-    value => {
-      let next = step(downstream(), value)
-      if (next instanceof Complete) {
-        cancel()
-        setDownstream(next.value)
-      } else {
-        setDownstream(next)
-      }
-    }
-  )
-
-  setCancel(downstream, cancel)
-
-  return downstream
-}
-
-/**
- * Transducers version of reductions.
- * 
- * It is possible implement every other collection operation in terms of
- * reduce. Transducers leverage this fact to provide every collection
- * operation as a higher-level transformation of the stepping function.
- * Benefits:
- * - You can compose transducer functions
- * - You don't need to create intermediate collections
- * - Every collection operation can be had if you just implement reduce.
- * 
- * @see http://blog.cognitect.com/blog/2014/8/6/transducers-are-coming
- * @see http://bendyworks.com/transducers-clojures-next-big-idea/
- * @see https://www.cs.nott.ac.uk/~pszgmh/fold.pdf
- */
-export const transductions = (xf, step, upstream, initial) =>
-  reductions(xf(step), upstream, initial)
-
-/**
- * Create a mapping reducer function
- */
-export const mapping = transform => step => (state, value) =>
-  step(state, transform(value))
-
-const stepForward = (_, next) => next
-
-  /**
- * @template Value
- * @template MappedValue
- * @param {SignalValue<Value>} upstream
- * @param {(value: Value) => MappedValue} transform 
- * @returns {SignalValue<MappedValue>}
- */
-export const map = (upstream, transform) =>
-  transductions(mapping(transform), stepForward, upstream, null)
-
-/**
- * Create a filtering reducer function
- */
-export const filtering = predicate => step => (state, value) =>
-  predicate(value) ? step(state, value) : state
-
-const getId = x => x.id
+export const getId = x => x.id
 
 /**
  * Index an array to a `Map` by key, using `getKey`.
@@ -355,13 +410,13 @@ export const index = (values, getKey=getId) => {
  * @template Key
  * @template Value
  * @param {SignalValue<Array<Value>>} items
- * @param {(Value) => Key} getKey
+ * @param {(value: Value) => Key} getKey
  * @returns {SignalValue<Map<Key, Value>>}
  */
 export const indexed = (items, getKey=getId) =>
   map(items, items => index(items, getKey))
 
-/**
+  /**
  * @template State
  * @template Msg
  * @typedef Transaction
@@ -401,13 +456,13 @@ export const next = (state, effects=[]) => ({state, effects})
  * @returns {[SignalValue<State>, (Msg) => void]} a signal value and
  *   send function.
  */
-export const store = ({
+export const useStore = ({
   init,
   update,
   debug=false
 }) => {
   let {state: initial, effects} = init()
-  const [state, setState] = signal(initial)
+  const [state, setState] = useSignal(initial)
 
   /**
    * @param {Promise<Msg>|Msg} effect
@@ -456,10 +511,13 @@ export const unknown = (state, msg) => {
  * @param {(state: State) => (Element|string)} create - a function to create
  *   new children. Children are created once for each key. All updates to
  *   children happen through signals passed to child.
- * @returns {Cancel} - function to cancel future child renders.
+ * @returns {Element} - function to cancel future child renders.
  */
-export const list = (states, parent, create) => 
-  states.sub(() => renderList(parent, states, create))
+export const list = (parent, states, create) => {
+  const cancel = states.sub(() => renderList(parent, states, create))
+  setCancel(parent, cancel)
+  return parent
+}
 
 const renderList = (
   parent,

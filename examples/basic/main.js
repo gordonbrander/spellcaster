@@ -1,5 +1,5 @@
 import {
-  store,
+  useStore,
   next,
   unknown,
   map,
@@ -36,7 +36,7 @@ const Card = (state, send) => {
 const Deck = (cards, send) => {
   let deckEl = el('div')
   deckEl.classList.add('deck')
-  let cancel = list(cards, deckEl, state => Card(state, send))
+  let cancel = list(deckEl, cards, state => Card(state, send))
   return deckEl
 }
   
@@ -120,7 +120,7 @@ const update = (state, msg) => {
   }
 }
 
-const [state, send] = store({
+const [state, send] = useStore({
   debug: true,
   init,
   update
