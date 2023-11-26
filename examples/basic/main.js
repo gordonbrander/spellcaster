@@ -6,7 +6,9 @@ import {
   index,
   list,
   animate,
-  cid
+  cid,
+  render,
+  html
 } from '../../tendril.js'
 
 const Msg = {}
@@ -129,3 +131,17 @@ const [state, send] = useStore({
 let appEl = App(animate(state), send)
 
 document.body.append(appEl)
+
+const articleTemplate = html`
+<article class="article">
+  <hgroup>
+    <h1></h1>
+    <p></p>
+  </hgroup>
+  <div class="article-content content">
+  </div>
+</article>
+`
+
+const fragment = render(articleTemplate)
+console.log(fragment)

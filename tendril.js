@@ -54,7 +54,7 @@ class Observable {
    * @param {Value} value
    */
   pub(value) {
-    for (let subscriber of this.#subscribers) {
+    for (const subscriber of this.#subscribers) {
       subscriber(value)
     }
   }
@@ -148,7 +148,7 @@ export const cancel = cancellable => {
 export const batchCancels = cancels => {
   let batch = new Set(cancels)
   return () => {
-    for (let cancel of batch) {
+    for (const cancel of batch) {
       cancel()
     }
     batch.clear()
@@ -392,7 +392,7 @@ export const getId = x => x.id
  */
 export const index = (values, getKey=getId) => {
   let indexed = new Map()
-  for (let value of values) {
+  for (const value of values) {
     let key = getKey(value)
     indexed.set(key, value)
   }
@@ -479,7 +479,7 @@ export const useStore = ({
     }
     let {state: next, effects} = update(state(), msg)
     setState(next)
-    for (let effect of effects) {
+    for (const effect of effects) {
       run(effect)
     }
   }
@@ -529,7 +529,7 @@ const renderList = (
   // removing in-place would change the live node list and bork iteration.
   let childMap = new Map()
   let removes = []
-  for (let child of parent.children) {
+  for (const child of parent.children) {
     const key = child.dataset.key
     childMap.set(key, child)
     if (!states().has(key)) {
@@ -537,7 +537,7 @@ const renderList = (
     }
   }
 
-  for (let child of removes) {
+  for (const child of removes) {
     // Cancel child subscription and remove
     cancel(child)
     parent.removeChild(child)
@@ -545,7 +545,7 @@ const renderList = (
 
   // Add or re-order children as needed.
   let i = 0
-  for (let key of states().keys()) {
+  for (const key of states().keys()) {
     let child = childMap.get(key)
     if (child == null) {
       const state = map(states, index => index.get(key))
@@ -586,3 +586,138 @@ let _cid = 0
  * @returns {string} a client ID
  */
 export const cid = () => `cid${_cid++}`
+
+/** @type {Map<string, HTMLTemplateElement>} */
+const TEMPLATE_CACHE = new Map()
+
+/**
+ * Create or clone a template from a string
+ * @param {string} template the HTML template string
+ * @returns {DocumentFragment}
+ */
+const template = template => {
+  const templateElement = TEMPLATE_CACHE.get(template)
+  if (templateElement != null) {
+    // @ts-ignore
+    return templateElement.content.cloneNode(true)
+  } else {
+    const templateElement = document.createElement('template')
+    templateElement.innerHTML = template
+    TEMPLATE_CACHE.set(template, templateElement)
+    // @ts-ignore
+    return templateElement.content.cloneNode(true)
+  }
+}
+
+const TEMPLATE_SIGIL = '🌱TEMPLATE_REPLACEMENT🌱'
+const TEMPLATE_SIGIL_COMMENT = `<!--${TEMPLATE_SIGIL}-->`
+
+const isTemplateSigilString = string => string === TEMPLATE_SIGIL_COMMENT
+
+const isTemplateSigilNode = node => (
+  node.nodeType === Node.COMMENT_NODE &&
+  node.nodeValue === TEMPLATE_SIGIL
+)
+
+export class TemplateResult {
+  constructor(strings, replacements) {
+    this.template = strings.join(TEMPLATE_SIGIL_COMMENT)
+    this.replacements = replacements
+  }
+}
+
+class Tape {
+  #index
+
+  constructor(array) {
+    this.array = array
+    this.#index = 0
+  }
+
+  peek() {
+    return this.#index
+  }
+
+  next() {
+    const value = this.array[this.#index]
+    this.#index++
+    return value
+  }
+}
+
+export const isTemplateResult = value => value instanceof TemplateResult
+
+export const render = result => {
+  const fragment = template(result.template)
+  return renderTemplateReplacements(
+    fragment,
+    new Tape(result.replacements)
+  )
+}
+
+const renderTemplateReplacements = (subject, tape) => {
+  for (const node of subject.childNodes) {
+    if (isTemplateSigilNode(node)) {
+      replaceElementSigil(node, tape)
+      continue
+    }
+    if (node instanceof Element) {
+      replaceAttributeSigils(node, tape)
+    }
+    if (node.hasChildNodes()) {
+      renderTemplateReplacements(node, tape)
+    }
+    // Select lists "default" selections get out of wack when being moved around
+    // inside fragments, this resets them.
+    if (node instanceof HTMLOptionElement) {
+      node.selected = node.defaultSelected
+    }
+  }
+  return subject
+}
+
+const isSpecialAttr = (key, sigil) => key.charAt(0) === sigil
+const readSpecialAttr = (key, sigil) =>
+  isSpecialAttr(key, sigil) ? key.substring(1) : key
+
+const isEventAttr = key => isSpecialAttr(key, '@')
+const readEventAttr = key => readSpecialAttr(key, '@')
+const isPropAttr = key => isSpecialAttr(key, '.')
+const readPropAttr = key => readSpecialAttr(key, '.')
+
+const replaceAttributeSigils = (subject, tape) => {
+  let keys = subject.getAttributeNames()
+  for (const key of keys) {
+    let value = subject.getAttribute(key)
+    if (!isTemplateSigilString(value)) {
+      continue
+    }
+    const replacement = tape.next()
+    if (isEventAttr(key)) {
+      subject.removeAttribute(key)
+      const event = readEventAttr(key)
+      subject.addEventListener(event, replacement)
+    } else if (isPropAttr(key)) {
+      subject.removeAttribute(key)
+      let prop = readPropAttr(key)
+      subject[prop] = replacement
+    } else {
+      subject.removeAttribute(key)
+      subject.setAttribute(key, replacement)
+    }
+  }
+}
+
+const replaceElementSigil = (subject, tape) => {
+  const replacement = tape.next()
+  if (isTemplateResult(replacement)) {
+    const child = render(replacement)
+    subject.parentNode?.replaceChild(child, subject)
+  } else {
+    const child = document.createTextNode(replacement.toString())
+    subject.parentNode?.replaceChild(child, subject)
+  }
+}
+
+export const html = (strings, ...replacements) =>
+  new TemplateResult(strings, replacements)
