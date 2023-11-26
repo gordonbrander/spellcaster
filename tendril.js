@@ -91,6 +91,14 @@ export const signal = initial => {
 export const useSignal = signal
 
 /**
+ * Check if thing is a signal
+ * @param {*} thing 
+ * @returns {Boolean}
+ */
+export const isSignal = thing =>
+  typeof thing === 'function' && typeof thing.sub === 'function'
+
+/**
  * Create a reducer-style signal.
  * Signal may be updated by sending values to the returned setter. When you
  * set a new value, step is called with the current signal state and
@@ -101,7 +109,7 @@ export const useSignal = signal
  * @returns {[SignalValue<State>, (value: Value) => void]}
  */
 export const useReducer = (step, initial) => {
-  const [state, setState] = signal(initial)
+  const [state, setState] = useSignal(initial)
   const advanceState = value => setState(
     step(state(), value)
   )
@@ -187,7 +195,7 @@ class Reduced {
  * @returns {SignalValue<State>}
  */
 export const reductions = (step, subscribable, initial) => {
-  const [state, setState] = signal(initial)
+  const [state, setState] = useSignal(initial)
   const cancel = subscribable.sub(value => {
     let next = step(state(), value)
     // If reduction sent a complete sentinal value, then cancel our subscription
@@ -293,7 +301,7 @@ export const sampleOn = (
   schedule,
   resample
 ) => {
-  let [downstream, setDownstream] = signal(resample())
+  let [downstream, setDownstream] = useSignal(resample())
 
   // Batch samples to prevent the "diamond problem".
   // Diamond problem: if multiple upstream triggers are derived from the
@@ -604,24 +612,28 @@ const template = template => {
     const templateElement = document.createElement('template')
     templateElement.innerHTML = template
     TEMPLATE_CACHE.set(template, templateElement)
+    const clone = templateElement.content.cloneNode(true)
+    // textNodes are automatically split somewhere around 65kb.
+    // Normalize joins them back together.
+    clone.normalize() 
     // @ts-ignore
-    return templateElement.content.cloneNode(true)
+    return clone
   }
 }
 
-const TEMPLATE_SIGIL = '🌱TEMPLATE_REPLACEMENT🌱'
-const TEMPLATE_SIGIL_COMMENT = `<!--${TEMPLATE_SIGIL}-->`
+const TEMPLATE_REPLACEMENT_SIGIL = `template-replacement-${Date.now()}`
+const TEMPLATE_REPLACEMENT_COMMENT = `<!--${TEMPLATE_REPLACEMENT_SIGIL}-->`
 
-const isTemplateSigilString = string => string === TEMPLATE_SIGIL_COMMENT
+const isTemplateSigilString = string => string === TEMPLATE_REPLACEMENT_COMMENT
 
-const isTemplateSigilNode = node => (
+const isTemplateReplacementComment = node => (
   node.nodeType === Node.COMMENT_NODE &&
-  node.nodeValue === TEMPLATE_SIGIL
+  node.nodeValue === TEMPLATE_REPLACEMENT_SIGIL
 )
 
 export class TemplateResult {
   constructor(strings, replacements) {
-    this.template = strings.join(TEMPLATE_SIGIL_COMMENT)
+    this.template = strings.join(TEMPLATE_REPLACEMENT_COMMENT)
     this.replacements = replacements
   }
 }
@@ -635,12 +647,12 @@ class Tape {
   }
 
   peek() {
-    return this.#index
+    return this.array[this.#index]
   }
 
   next() {
     const value = this.array[this.#index]
-    this.#index++
+    this.#index = this.#index + 1
     return value
   }
 }
@@ -649,23 +661,23 @@ export const isTemplateResult = value => value instanceof TemplateResult
 
 export const render = result => {
   const fragment = template(result.template)
-  return renderTemplateReplacements(
+  return renderNodeReplacements(
     fragment,
     new Tape(result.replacements)
   )
 }
 
-const renderTemplateReplacements = (subject, tape) => {
+const renderNodeReplacements = (subject, tape) => {
   for (const node of subject.childNodes) {
-    if (isTemplateSigilNode(node)) {
-      replaceElementSigil(node, tape)
+    if (isTemplateReplacementComment(node)) {
+      renderElementReplacement(node, tape)
       continue
     }
     if (node instanceof Element) {
-      replaceAttributeSigils(node, tape)
+      renderAttrReplacements(node, tape)
     }
     if (node.hasChildNodes()) {
-      renderTemplateReplacements(node, tape)
+      renderNodeReplacements(node, tape)
     }
     // Select lists "default" selections get out of wack when being moved around
     // inside fragments, this resets them.
@@ -676,45 +688,72 @@ const renderTemplateReplacements = (subject, tape) => {
   return subject
 }
 
-const isSpecialAttr = (key, sigil) => key.charAt(0) === sigil
-const readSpecialAttr = (key, sigil) =>
-  isSpecialAttr(key, sigil) ? key.substring(1) : key
+const isSpecialAttrKey = (key, sigil) => key.charAt(0) === sigil
+const readSpecialAttrKey = (key, sigil) =>
+  isSpecialAttrKey(key, sigil) ? key.substring(1) : key
 
-const isEventAttr = key => isSpecialAttr(key, '@')
-const readEventAttr = key => readSpecialAttr(key, '@')
-const isPropAttr = key => isSpecialAttr(key, '.')
-const readPropAttr = key => readSpecialAttr(key, '.')
+const isEventAttrKey = key => isSpecialAttrKey(key, '@')
+const readEventAttrKey = key => readSpecialAttrKey(key, '@')
+const isPropAttrKey = key => isSpecialAttrKey(key, '.')
+const readPropAttrKey = key => readSpecialAttrKey(key, '.')
 
-const replaceAttributeSigils = (subject, tape) => {
+const renderAttrReplacements = (subject, tape) => {
   let keys = subject.getAttributeNames()
   for (const key of keys) {
-    let value = subject.getAttribute(key)
+    const value = subject.getAttribute(key)
     if (!isTemplateSigilString(value)) {
       continue
     }
     const replacement = tape.next()
-    if (isEventAttr(key)) {
+    if (isEventAttrKey(key)) {
       subject.removeAttribute(key)
-      const event = readEventAttr(key)
+      const event = readEventAttrKey(key)
       subject.addEventListener(event, replacement)
-    } else if (isPropAttr(key)) {
+    } else if (isPropAttrKey(key)) {
       subject.removeAttribute(key)
-      let prop = readPropAttr(key)
-      subject[prop] = replacement
+      const prop = readPropAttrKey(key)
+      if (isSignal(replacement)) {
+        subject[prop] = replacement.value
+        const cancel = replacement.sub(
+          value => subject[prop] = value
+        )
+      } else {
+        subject[prop] = replacement
+      }
     } else {
       subject.removeAttribute(key)
-      subject.setAttribute(key, replacement)
+      if (isSignal(replacement)) {
+        subject.setAttribute(key, replacement())
+        const cancel = replacement.sub(
+          value => subject.setAttribute(key, value)
+        )
+      } else {
+        subject.setAttribute(key, replacement)
+      }
     }
   }
 }
 
-const replaceElementSigil = (subject, tape) => {
+let _existing
+const renderElementReplacement = (subject, tape) => {
   const replacement = tape.next()
   if (isTemplateResult(replacement)) {
     const child = render(replacement)
     subject.parentNode?.replaceChild(child, subject)
+  } else if (isSignal(replacement)) {
+    const parent = subject.parentNode
+    const replacementTextNodes = map(
+      replacement,
+      value => document.createTextNode(value)
+    )
+    let templateSlot = subject
+    const cancel = replacementTextNodes.sub(textNode => {
+      const existing = templateSlot
+      parent?.replaceChild(textNode, existing)
+      templateSlot = textNode
+    })
   } else {
-    const child = document.createTextNode(replacement.toString())
+    const child = document.createTextNode(replacement)
     subject.parentNode?.replaceChild(child, subject)
   }
 }
