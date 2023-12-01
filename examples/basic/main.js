@@ -30,7 +30,7 @@ const Card = (state, send) => {
   cardEl.append(contentEl)
 
   let text = map(state, state => state.text)
-  text.sub(text => contentEl.textContent = text)
+  text.observe(text => contentEl.textContent = text)
 
   return cardEl
 }
@@ -128,20 +128,6 @@ const [state, send] = useStore({
   update
 })
 
-let appEl = App(animate(state), send)
+let appEl = App(state, send)
 
 document.body.append(appEl)
-
-const articleTemplate = html`
-<article class="article">
-  <hgroup>
-    <h1></h1>
-    <p></p>
-  </hgroup>
-  <div class="article-content content">
-  </div>
-</article>
-`
-
-const fragment = render(articleTemplate)
-console.log(fragment)

@@ -19,7 +19,7 @@
 /**
  * @template Value
  * @typedef {Object} Subscribable
- * @property {(subscriber: Subscriber<Value>) => Cancel} sub - subscribe
+ * @property {(subscriber: Subscriber<Value>) => Cancel} observe - subscribe
  *   to future values, returning a function to cancel the subscription.
  */
 
@@ -30,59 +30,76 @@
  */
 
 /**
- * @template Value
- * @satisfies {Subscribable<Value>}
+ * Create a throttling scheduler. Scheduler can be called multiple times with
+ * different thunks but will only be called once per interval.
+ * You can call the scheduler with different thunks. Last thunk wins.
+ * 
+ * @param {(thunk: () => void) => void} schedule 
+ * @returns {(thunk: () => void) => void}
  */
-class Observable {
-  /** @type {Set<Subscriber<Value>>} */
-  #subscribers = new Set()
+const createThrottlingScheduler = schedule => {
+  /** @type {(() => void) | null} */
+  let perform = null
+  let isUpdateScheduled = false
 
-  /**
-   * Subscribe to this observable
-   * @param {Subscriber<Value>} subscriber callback
-   * @returns {Cancel} - call to cancel subscription
-   */
-  sub(subscriber) {
-    this.#subscribers.add(subscriber)
-    return () => {
-      this.#subscribers.delete(subscriber)
+  const performUpdate = () => {
+    if (perform != null) {
+      perform()
     }
+    isUpdateScheduled = false
   }
 
-  /**
-   * Publish a new value
-   * @param {Value} value
-   */
-  pub(value) {
-    for (const subscriber of this.#subscribers) {
-      subscriber(value)
+  return thunk => {
+    // Assign new thunk. Last thunk assigned during this tick wins.
+    perform = thunk
+    if (!isUpdateScheduled) {
+      isUpdateScheduled = true
+      schedule(performUpdate)
     }
   }
 }
 
 /**
- * Create a new signal, using a stepping function and an initial state.
+ * Signals updates are deferred to the next microtask and batched.
+ * Only the last set during a single tick will trigger an update to observers.
+ * This solves the "diamond problem"
  * @template Value
- * @param {Value} initial
  * @returns {[SignalValue<Value>, (value: Value) => void]}
  */
 export const signal = initial => {
-  const subscribers = new Observable()
-
+  const observers = new Set()
+  const throttle = createThrottlingScheduler(queueMicrotask)
   let value = initial
 
   const setValue = next => {
     if (value !== next) {
       value = next
-      subscribers.pub(value)
+      // Batch dispatches to prevent the "diamond problem".
+      // Diamond problem: if multiple upstream triggers are derived from the
+      // same source, you'll get two events for every event on source.
+      // Example: Signal A has two signals derived from it: B and C.
+      // D samples on B and C. When A publishes, B and C both publish. D
+      // receives two events, one after the other, resulting in two different
+      // sample values, one after the other.
+      //
+      // Batching solves the problem by only dispatching once per microtask,
+      // using the last dispatch.
+      throttle(dispatch)
+    }
+  }
+
+  const dispatch = () => {
+    for (let observer of observers) {
+      observer(value)
     }
   }
 
   const getValue = () => value
 
-  getValue.sub = subscriber => {
-    subscriber(value)
-    return subscribers.sub(subscriber)
+  getValue.observe = observer => {
+    observer(value)
+    observers.add(observer)
+    return () => observers.delete(observer)
   }
 
   return [getValue, setValue]
@@ -97,6 +114,23 @@ export const useSignal = signal
  */
 export const isSignal = thing =>
   typeof thing === 'function' && typeof thing.sub === 'function'
+
+/**
+ * Throttle a signal, returning a new signal that updates only once per
+ * animation frame.
+ * @template Value
+ * @param {SignalValue<Value>} upstream
+ * @returns {SignalValue<Value>}
+ */
+export const animate = upstream => {
+  const throttleAnimation = createThrottlingScheduler(requestAnimationFrame)
+  let [downstream, setDownstream] = signal(upstream())
+  const cancel = upstream.observe(
+    value => throttleAnimation(() => setDownstream(value))
+  )
+  setCancel(downstream, cancel)
+  return downstream
+}
 
 /**
  * Create a reducer-style signal.
@@ -190,13 +224,13 @@ class Reduced {
  * Create a new signal by reducing over any subscribable value
  * @template State, Value
  * @param {Step<State, Value>} step
- * @param {Subscribable<Value>} subscribable
+ * @param {Subscribable<Value>} value
  * @param {State} initial
  * @returns {SignalValue<State>}
  */
-export const reductions = (step, subscribable, initial) => {
+export const reductions = (step, value, initial) => {
   const [state, setState] = useSignal(initial)
-  const cancel = subscribable.sub(value => {
+  const cancel = value.observe(value => {
     let next = step(state(), value)
     // If reduction sent a complete sentinal value, then cancel our subscription
     // and set the completed value as the last published state.
@@ -281,106 +315,34 @@ const stepForward = (_, value) => value
  */
 export const map = (upstream, transform) => {
   let xf = mapping(transform)
-  return transductions(xf, stepForward, upstream, null)
+  let initial = transform(upstream())
+  return transductions(xf, stepForward, upstream, initial)
 }
 
 /**
  * Sample values via closure by watching a list of trigger signals.
- * Samples are throttled using `schedule`, which returns a promise for
- * an interval on which we should sample.
  * @example sample the sum of x and y whenever either changes
  * let sum = sample([x, y], () => x() + y())
  * @template Value
  * @param {Array<SignalValue<Value>>} triggers
- * @param {() => Promise<any>} schedule
  * @param {() => Value} resample
  * @returns {SignalValue<Value>}
  */
-export const sampleOn = (
-  triggers,
-  schedule,
-  resample
-) => {
+export const sample = (triggers, resample) => {
   let [downstream, setDownstream] = useSignal(resample())
 
-  // Batch samples to prevent the "diamond problem".
-  // Diamond problem: if multiple upstream triggers are derived from the
-  // same source, you'll get two events for every event on source.
-  // Example: Signal A has two signals derived from it: B and C.
-  // D samples on B and C. When A publishes, B and C both publish. D receives
-  // two events, one after the other, resulting in two different sample values,
-  // one after the other.
-  //
-  // Batching solves the problem by only sampling once per microtask, using
-  // on the last event for that microtask. You'll only sample once.
-  let isScheduled = false
-  const scheduleResample = async () => {
-    if (!isScheduled) {
-      isScheduled = true
-      await schedule()
-      setDownstream(resample())
-      isScheduled = false
-    }
-  }
-
   const cancel = batchCancels(
-    triggers.map(upstream => upstream.sub(scheduleResample))
+    triggers.map(
+      upstream => upstream.observe(
+        () => setDownstream(resample())
+      )
+    )
   )
 
   setCancel(downstream, cancel)
 
   return downstream
 }
-
-/**
- * @returns {Promise<void>} A promise for the next microtask
- */
-export const microtask = () => Promise.resolve()
-
-/**
- * @returns {Promise<Number>} A promise for the next animation frame
- */
-export const animationFrame = () => new Promise(requestAnimationFrame)
-
-/**
- * Sample values via closure by watching a list of trigger signals.
- * Samples are throttled to one-per-event-loop-tick.
- * @template Value
- * @param {Array<SignalValue<Value>>} triggers
- * @param {() => Value} resample
- * @returns {SignalValue<Value>}
- */
-export const sample = (triggers, resample) => sampleOn(
-  triggers,
-  microtask,
-  resample
-)
-
-/**
- * Throttle a signal, returning a new signal that updates only once per
- * Samples are throttled to one-per-event-loop-tick.
- * @template Value
- * @param {SignalValue<Value>} upstream
- * @returns {SignalValue<Value>}
- */
-export const throttle = upstream => sampleOn(
-  [upstream],
-  microtask,
-  upstream
-)
-
-/**
- * Throttle a signal, returning a new signal that updates only once per
- * animation frame.
- * @template Value
- * @param {SignalValue<Value>} upstream
- * @returns {SignalValue<Value>}
- */
-export const animate = upstream => sampleOn(
-  [upstream],
-  animationFrame,
-  upstream,
-)
 
 /**
  * Get object id property
@@ -487,6 +449,10 @@ export const useStore = ({
     }
     let {state: next, effects} = update(state(), msg)
     setState(next)
+    if (debug) {
+      console.debug("store.state", next)
+      console.debug("store.effects", effects.length)
+    }
     for (const effect of effects) {
       run(effect)
     }
@@ -522,7 +488,7 @@ export const unknown = (state, msg) => {
  * @returns {Element} - function to cancel future child renders.
  */
 export const list = (parent, states, create) => {
-  const cancel = states.sub(() => renderList(parent, states, create))
+  const cancel = states.observe(() => renderList(parent, states, create))
   setCancel(parent, cancel)
   return parent
 }
@@ -535,8 +501,8 @@ const renderList = (
   // Remove children that are no longer part of state
   // Note that we must construct a list of children to remove, since
   // removing in-place would change the live node list and bork iteration.
-  let childMap = new Map()
-  let removes = []
+  const childMap = new Map()
+  const removes = []
   for (const child of parent.children) {
     const key = child.dataset.key
     childMap.set(key, child)
@@ -554,9 +520,9 @@ const renderList = (
   // Add or re-order children as needed.
   let i = 0
   for (const key of states().keys()) {
-    let child = childMap.get(key)
+    const child = childMap.get(key)
     if (child == null) {
-      const state = map(states, index => index.get(key))
+      const state = map(states, states => states.get(key))
       const child = create(state)
       setCancel(child, () => cancel(state))
       child.dataset.key = key
@@ -594,169 +560,3 @@ let _cid = 0
  * @returns {string} a client ID
  */
 export const cid = () => `cid${_cid++}`
-
-/** @type {Map<string, HTMLTemplateElement>} */
-const TEMPLATE_CACHE = new Map()
-
-/**
- * Create or clone a template from a string
- * @param {string} template the HTML template string
- * @returns {DocumentFragment}
- */
-const template = template => {
-  const templateElement = TEMPLATE_CACHE.get(template)
-  if (templateElement != null) {
-    // @ts-ignore
-    return templateElement.content.cloneNode(true)
-  } else {
-    const templateElement = document.createElement('template')
-    templateElement.innerHTML = template
-    TEMPLATE_CACHE.set(template, templateElement)
-    const clone = templateElement.content.cloneNode(true)
-    // textNodes are automatically split somewhere around 65kb.
-    // Normalize joins them back together.
-    clone.normalize() 
-    // @ts-ignore
-    return clone
-  }
-}
-
-const TEMPLATE_REPLACEMENT_SIGIL = `template-replacement-${Date.now()}`
-const TEMPLATE_REPLACEMENT_COMMENT = `<!--${TEMPLATE_REPLACEMENT_SIGIL}-->`
-
-const isTemplateSigilString = string => string === TEMPLATE_REPLACEMENT_COMMENT
-
-const isTemplateReplacementComment = node => (
-  node.nodeType === Node.COMMENT_NODE &&
-  node.nodeValue === TEMPLATE_REPLACEMENT_SIGIL
-)
-
-export class TemplateResult {
-  constructor(strings, replacements) {
-    this.template = strings.join(TEMPLATE_REPLACEMENT_COMMENT)
-    this.replacements = replacements
-  }
-}
-
-class Tape {
-  #index
-
-  constructor(array) {
-    this.array = array
-    this.#index = 0
-  }
-
-  peek() {
-    return this.array[this.#index]
-  }
-
-  next() {
-    const value = this.array[this.#index]
-    this.#index = this.#index + 1
-    return value
-  }
-}
-
-export const isTemplateResult = value => value instanceof TemplateResult
-
-export const render = result => {
-  const fragment = template(result.template)
-  return renderNodeReplacements(
-    fragment,
-    new Tape(result.replacements)
-  )
-}
-
-const renderNodeReplacements = (subject, tape) => {
-  for (const node of subject.childNodes) {
-    if (isTemplateReplacementComment(node)) {
-      renderElementReplacement(node, tape)
-      continue
-    }
-    if (node instanceof Element) {
-      renderAttrReplacements(node, tape)
-    }
-    if (node.hasChildNodes()) {
-      renderNodeReplacements(node, tape)
-    }
-    // Select lists "default" selections get out of wack when being moved around
-    // inside fragments, this resets them.
-    if (node instanceof HTMLOptionElement) {
-      node.selected = node.defaultSelected
-    }
-  }
-  return subject
-}
-
-const isSpecialAttrKey = (key, sigil) => key.charAt(0) === sigil
-const readSpecialAttrKey = (key, sigil) =>
-  isSpecialAttrKey(key, sigil) ? key.substring(1) : key
-
-const isEventAttrKey = key => isSpecialAttrKey(key, '@')
-const readEventAttrKey = key => readSpecialAttrKey(key, '@')
-const isPropAttrKey = key => isSpecialAttrKey(key, '.')
-const readPropAttrKey = key => readSpecialAttrKey(key, '.')
-
-const renderAttrReplacements = (subject, tape) => {
-  let keys = subject.getAttributeNames()
-  for (const key of keys) {
-    const value = subject.getAttribute(key)
-    if (!isTemplateSigilString(value)) {
-      continue
-    }
-    const replacement = tape.next()
-    if (isEventAttrKey(key)) {
-      subject.removeAttribute(key)
-      const event = readEventAttrKey(key)
-      subject.addEventListener(event, replacement)
-    } else if (isPropAttrKey(key)) {
-      subject.removeAttribute(key)
-      const prop = readPropAttrKey(key)
-      if (isSignal(replacement)) {
-        subject[prop] = replacement.value
-        const cancel = replacement.sub(
-          value => subject[prop] = value
-        )
-      } else {
-        subject[prop] = replacement
-      }
-    } else {
-      subject.removeAttribute(key)
-      if (isSignal(replacement)) {
-        subject.setAttribute(key, replacement())
-        const cancel = replacement.sub(
-          value => subject.setAttribute(key, value)
-        )
-      } else {
-        subject.setAttribute(key, replacement)
-      }
-    }
-  }
-}
-
-let _existing
-const renderElementReplacement = (subject, tape) => {
-  const replacement = tape.next()
-  if (isTemplateResult(replacement)) {
-    const child = render(replacement)
-    subject.parentNode?.replaceChild(child, subject)
-  } else if (isSignal(replacement)) {
-    const parent = subject.parentNode
-    const replacementTextNodes = map(
-      replacement,
-      value => document.createTextNode(value)
-    )
-    let templateSlot = subject
-    const cancel = replacementTextNodes.sub(textNode => {
-      const existing = templateSlot
-      parent?.replaceChild(textNode, existing)
-      templateSlot = textNode
-    })
-  } else {
-    const child = document.createTextNode(replacement)
-    subject.parentNode?.replaceChild(child, subject)
-  }
-}
-
-export const html = (strings, ...replacements) =>
-  new TemplateResult(strings, replacements)
