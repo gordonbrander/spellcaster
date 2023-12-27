@@ -1,19 +1,21 @@
 import {
-  constant,
   map,
   indexed,
   pipe,
   useStore,
   next,
   unknown,
+  index,
+  animate
+} from '../../tendril.js'
+
+import {
   h,
   children,
   list,
   text,
-  cid,
-  index,
-  animate
-} from '../../lib.js'
+  cid
+} from '../../dom.js'
 
 const action = {}
 

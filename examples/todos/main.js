@@ -6,8 +6,8 @@ import {
   pipe,
   useStore,
   next,
-  unknown,
-} from '../../lib.js'
+  unknown
+} from '../../tendril.js'
 
 import {
   h,
