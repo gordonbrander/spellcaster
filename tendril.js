@@ -335,18 +335,18 @@ export const animate = $upstream => batchOn($upstream, requestAnimationFrame)
 /**
  * Given two values, choose the next one.
  */
-export const combine = (left, right) => [left, right]
+export const pair = (left, right) => [left, right]
 
 /**
  * Merge two streams, using `combine` to merge signal values into a
  * single value.
  */
-export const merge = ($left, $right, combine=combine) => {
-  const [$downstream, sendDownstream] = signal(combine($left(), $right()))
+export const merge = ($left, $right, combine=pair) => {
+  const [$downstream, sendDownstream] = useSignal(combine($left(), $right()))
 
-  const onValue = _ => combine($left(), $right())
+  const onValue = _ => sendDownstream(combine($left(), $right()))
 
-  const endCount = 0
+  let endCount = 0
 
   const onComplete = _ => {
     endCount++

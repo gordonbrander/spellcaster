@@ -1,10 +1,10 @@
 import {
-  useSignal
+  useSignal,
   map,
   merge
 } from '../../tendril.js'
 
-const $clock = useSignal(new Date())
+const [$clock, sendClock] = useSignal(new Date())
 
 const $seconds = map($clock, date => date.getSeconds())
 const $milliseconds = map($clock, date => date.getUTCMilliseconds())
@@ -16,7 +16,7 @@ $pairs.listen(([seconds, milliseconds]) => console.log(
   `s: ${seconds} / ms: ${milliseconds}`
 ))
 
-setTimeout(
-  () => $clock.send(new Date()),
+setInterval(
+  () => sendClock(new Date()),
   1000
 )
