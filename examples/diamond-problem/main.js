@@ -1,25 +1,22 @@
 import {
-  useSignal,
+  useSignal
   map,
-  sample
+  merge
 } from '../../tendril.js'
 
-let [clock, setClock] = useSignal(new Date())
+const $clock = useSignal(new Date())
 
-let seconds = map(clock, date => date.getSeconds())
-let milliseconds = map(clock, date => date.getUTCMilliseconds())
+const $seconds = map($clock, date => date.getSeconds())
+const $milliseconds = map($clock, date => date.getUTCMilliseconds())
+const $pairs = merge($seconds, $milliseconds)
 
-let message = sample(
-  [seconds, milliseconds],
-  () => `s: ${seconds()} / ms: ${milliseconds()}`
-)
+console.log("message should only log once per change")
 
-console.log("message should only log once per clock change")
-message.observe(value => console.log(value))
+$pairs.listen(([seconds, milliseconds]) => console.log(
+  `s: ${seconds} / ms: ${milliseconds}`
+))
 
-setInterval(
-  () => {
-    setClock(new Date())
-  },
+setTimeout(
+  () => $clock.send(new Date()),
   1000
 )
