@@ -4,6 +4,58 @@ const set = (object, key, value) => {
 }
 
 /**
+ * Transform a thunk so that it runs only once per microtask, no matter how
+ * often it is called.
+ */
+export const batchScheduler = (callback, queue=queueMicrotask) => {
+  let isScheduled = false
+  let value = null
+  
+  const performBatch = () => {
+    callback(value)
+    isScheduled = false
+  }
+
+  const schedule = next => {
+    if (!isScheduled) {
+      isScheduled = true
+      queue(performBatch)
+    }
+    value = next
+  }
+
+  return schedule
+}
+
+const transactionManager = () => {
+  const queue = []
+
+  const transact = () => {
+    let i = 0
+    while (i < queue.length) {
+      const job = queue[i]
+      job()
+      i++
+    }
+    queue.length = 0
+  }
+
+  const scheduleTransaction = batchScheduler(transact)
+
+  const withTransaction = job => {
+    scheduleTransaction()
+    queue.push(job)
+  }
+
+  return withTransaction
+}
+
+/**
+ * Perform callback with the next transaction
+ */
+export const withTransaction = transactionManager()
+
+/**
  * Symbol key for tags. We use tags as a userspace version of types.
  */
 export const __tag__ = Symbol('tag')
@@ -60,12 +112,18 @@ const freeze = Object.freeze
 
 /**
  * A signal is a reactive state container. It holds a single value which is
- * updated atomically with transactions.
+ * updated atomically.
  *
- * Consumers may subscribe to read atomic state changes with the `sink()`
+ * Consumers may subscribe to signal update events with the `listen()`
  * method, or read the current value of the signal by calling it as a function.
+ *
+ * All signal states update together during an atomic transaction. Listeners
+ * receive the next state for the signal before it is set. Sampling signals
+ * in a listener will always give the current value of the signal before the
+ * transaction takes place. This ensures all listeners have a consistent view
+ * of signal state.
  */
-export const useSignal = initial => {
+export const useSignal = (initial) => {
   const listeners = new Set()
 
   let state = unwrapComplete(initial)
@@ -94,12 +152,6 @@ export const useSignal = initial => {
 
   tag(readSignal, __signal__)
 
-  const publish = value => {
-    for (const listener of listeners) {
-      listener(value)
-    }
-  }
-
   /**
    * Send new value to signal
    */
@@ -108,15 +160,19 @@ export const useSignal = initial => {
       return
     }
     if (state !== value) {
-      if (isComplete(value)) {
-        state = value.value
-        hasCompleted = true
-        publish(value)
-        listeners.clear()
-      } else {
-        state = value
-        publish(value)
+      // Notify listeners immediately
+      for (const listener of listeners) {
+        listener(value)
       }
+      if (isComplete(value)) {
+        hasCompleted = true
+        listeners.clear()
+      }
+      // Update state during the next transaction. This ensures state updates
+      // are atomic and listeners can never observe inconsistent state.
+      // To a listener, all state stays the same. You're always observing
+      // the state *before* it changes.
+      withTransaction(() => state = unwrapComplete(state))
     }
   }
 
@@ -247,16 +303,13 @@ export const takeWhile = ($upstream, predicate) => reductions(
  * Scope a signal, returning a new signal that will end either when upstream
  * ends, or when `transform()` returns `null`.
  */
-export const scope = ($upstream, transform) => reductions(
+export const compactMap = ($upstream, transform, initial) => reductions(
   $upstream,
   (state, value) => {
     const transformed = transform(value)
-    if (transformed == null) {
-      return complete(state)
-    }
-    return transformed
+    return transformed ?? state
   },
-  transform($upstream())
+  initial
 )
 
 export const getId = item => item.id
@@ -289,35 +342,11 @@ export const indexed = ($upstream, getKey=getId) => map(
 )
 
 /**
- * Transform a thunk so that it runs only once per microtask, no matter how
- * often it is called.
- */
-export const batchWith = (callback, queue=queueMicrotask) => {
-  let isScheduled = false
-  let value = null
-  
-  const performBatch = () => {
-    callback(value)
-    isScheduled = false
-  }
-
-  const schedule = next => {
-    if (!isScheduled) {
-      isScheduled = true
-      queue(performBatch)
-    }
-    value = next
-  }
-
-  return schedule
-}
-
-/**
  * Batch signal on some queue
  */
-const batchOn = ($upstream, queue) => {
+const batchStreamOn = ($upstream, queue) => {
   const [$downstream, sendDownstream] = useSignal($upstream())
-  const transact = batchWith(sendDownstream, queue)
+  const transact = batchScheduler(sendDownstream, queue)
   $upstream.listen(transact)
   return $downstream
 }
@@ -325,12 +354,13 @@ const batchOn = ($upstream, queue) => {
 /**
  * Batch signal on microtask
  */
-export const batch = $upstream => batchOn($upstream, queueMicrotask)
+export const batch = $upstream => batchStreamOn($upstream, queueMicrotask)
 
 /**
  * Batch signal on animation frame
  */
-export const animate = $upstream => batchOn($upstream, requestAnimationFrame)
+export const animate = $upstream =>
+  batchStreamOn($upstream, requestAnimationFrame)
 
 /**
  * Given two values, choose the next one.
@@ -342,22 +372,43 @@ export const pair = (left, right) => [left, right]
  * single value.
  */
 export const merge = ($left, $right, combine=pair) => {
-  const [$downstream, sendDownstream] = useSignal(combine($left(), $right()))
-
-  const onValue = _ => sendDownstream(combine($left(), $right()))
-
+  let leftState = $left()
+  let rightState = $right()
   let endCount = 0
 
-  const onComplete = _ => {
-    endCount++
-    const next = combine($left(), $right())
-    sendDownstream(endCount > 1 ? wrapComplete(next) : next)
-  }
+  const [$downstream, sendDownstream] = useSignal(
+    combine(leftState, rightState)
+  )
 
-  const listener = subscriber({onValue, onComplete})
+  $left.listen(
+    subscriber({
+      onValue: left => {
+        leftState = left
+        sendDownstream(combine(leftState, rightState))
+      },
+      onComplete: left => {
+        endCount++
+        leftState = left
+        const next = combine(leftState, rightState)
+        sendDownstream(endCount > 1 ? wrapComplete(next) : next)
+      }
+    })
+  )
 
-  $left.listen(listener)
-  $right.listen(listener)
+  $right.listen(
+    subscriber({
+      onValue: right => {
+        rightState = right
+        sendDownstream(combine(leftState, rightState))
+      },
+      onComplete: right => {
+        endCount++
+        rightState = right
+        const next = combine(leftState, rightState)
+        sendDownstream(endCount > 1 ? wrapComplete(next) : next)
+      }
+    })
+  )
 
   return batch($downstream)
 }

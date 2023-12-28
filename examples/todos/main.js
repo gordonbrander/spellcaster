@@ -1,5 +1,4 @@
 import {
-  constant,
   map,
   indexed,
   animate,

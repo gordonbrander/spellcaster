@@ -1,4 +1,10 @@
-import {scope, wrapSignal, setCancel, unwrapComplete, noOp} from './tendril.js'
+import {
+  compactMap,
+  wrapSignal,
+  setCancel,
+  unwrapComplete,
+  noOp
+} from './tendril.js'
 
 /**
  * The counter that is incremented for `cid()`
@@ -35,6 +41,7 @@ export const list = (view, $states, send) => parent => {
     }
 
     for (const child of removes) {
+      cancel(child)
       parent.removeChild(child)
     }
 
@@ -44,8 +51,9 @@ export const list = (view, $states, send) => parent => {
       if (child != null) {
         insertElementAt(parent, child, index)
       } else {
+        const state = states.get(key)
         const child = view(
-          scope($states, states => states.get(key)),
+          compactMap($states, states => states.get(key), state),
           send
         )
         child[__key__] = key
