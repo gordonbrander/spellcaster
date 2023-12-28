@@ -91,8 +91,9 @@ export const text = text => parent => {
 export const h = (tag, properties, configure=noOp) => {
   const element = document.createElement(tag)
 
-  wrapSignal(properties)
+  const cancel = wrapSignal(properties)
     .listen(value => props(element, unwrapComplete(value)))
+  setCancel(element, cancel)
 
   configure(element)
 
@@ -133,7 +134,7 @@ export const prop = (object, key, value) => {
 }
 
 const props = (element, props) => {
-  for (let [key, value] of Object.entries(props)) {
+  for (const [key, value] of Object.entries(props)) {
     prop(element, key, value)
   }
 }
