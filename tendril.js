@@ -1,59 +1,83 @@
-const set = (object, key, value) => {
-  object[key] = value
-  return object
-}
-
 /**
- * Transform a thunk so that it runs only once per microtask, no matter how
- * often it is called.
+ * Create a batch scheduler that will run the last callback that is scheduled.
  */
-export const batchScheduler = (callback, queue=queueMicrotask) => {
+export const batchScheduler = (queue=queueMicrotask) => {
   let isScheduled = false
-  let value = null
+  let job = null
   
   const performBatch = () => {
-    callback(value)
+    if (job != null) {
+      job()
+    }
     isScheduled = false
   }
 
-  const schedule = next => {
+  const schedule = callback => {
     if (!isScheduled) {
       isScheduled = true
       queue(performBatch)
     }
-    value = next
+    job = callback
   }
 
   return schedule
 }
 
-const transactionManager = () => {
-  const queue = []
+const stepForward = (prev, next) => next
 
-  const transact = () => {
-    let i = 0
-    while (i < queue.length) {
-      const job = queue[i]
-      job()
-      i++
+const keyedQueue = () => {
+  const queue = new Map()
+
+  const drain = perform => {
+    for (const key of queue.keys()) {
+      const value = queue.get(key)
+      perform(key, value)
     }
-    queue.length = 0
+    queue.clear()
   }
 
-  const scheduleTransaction = batchScheduler(transact)
-
-  const withTransaction = job => {
-    scheduleTransaction()
-    queue.push(job)
+  const enqueue = (key, value, choose=stepForward) => {
+    const prev = queue.get(key)
+    if (prev != null) {
+      queue.set(key, choose(prev, value))
+    } else {
+      queue.set(key, value)
+    }
   }
 
-  return withTransaction
+  return {enqueue, drain}
 }
 
-/**
- * Perform callback with the next transaction
- */
-export const withTransaction = transactionManager()
+const apply = (fn, value) => fn(value)
+
+const transactionManager = () => {
+  const writes = keyedQueue()
+  const reads = keyedQueue()
+
+  const transact = () => {
+    writes.drain(apply)
+    reads.drain(apply)
+  }
+
+  const schedule = batchScheduler()
+
+  const withQueue = enqueue => (callback, value, choose=stepForward) => {
+    schedule(transact)
+    enqueue(callback, value, choose)
+  }
+
+  return {
+    withWrites: withQueue(writes.enqueue),
+    withReads: withQueue(reads.enqueue)
+  }
+}
+
+const {withWrites, withReads} = transactionManager()
+
+const set = (object, key, value) => {
+  object[key] = value
+  return object
+}
 
 /**
  * Symbol key for tags. We use tags as a userspace version of types.
@@ -71,143 +95,185 @@ export const tag = (object, tag) => set(object, __tag__, tag)
 export const isTagged = (object, tag) => object[__tag__] === tag
 
 /**
- * Sentinal value for ending a stream/publisher
- */
-export const __complete__ = Symbol('complete')
-
-/**
- * Box a value in the sentinal type `complete`.
- */
-export const complete = value => tag({value}, __complete__)
-
-/**
- * Is value a complete sentinal value?
- */
-export const isComplete = value => isTagged(value, __complete__)
-
-/**
- * Unwrap a value if it is a complete sentinal value,
- * or else just return the value.
- */
-export const unwrapComplete = value => isComplete(value) ? value.value : value
-
-export const wrapComplete = value => isComplete(value) ? value : complete(value)
-
-/**
- * Symbol for tagging a signal
- */
-export const __signal__ = Symbol('signal')
-
-/**
- * Is value a signal?
- */
-export const isSignal = value => isTagged(value, __signal__)
-
-/**
  * Default callback that does nothing.
  */
 export const noOp = () => {}
 
-const freeze = Object.freeze
+/**
+ * Symbol for tagging a cell
+ */
+export const __cell__ = Symbol('cell')
+
+const __changes__ = Symbol('changes')
 
 /**
- * A signal is a reactive state container. It holds a single value which is
+ * Is value a signal?
+ */
+export const isCell = value => isTagged(value, __cell__)
+
+/**
+ * A cell is a reactive state container. It holds a single value which is
  * updated atomically.
  *
- * Consumers may subscribe to signal update events with the `listen()`
- * method, or read the current value of the signal by calling it as a function.
- *
- * All signal states update together during an atomic transaction. Listeners
- * receive the next state for the signal before it is set. Sampling signals
- * in a listener will always give the current value of the signal before the
- * transaction takes place. This ensures all listeners have a consistent view
- * of signal state.
+ * Consumers may subscribe to cell update events with the `listen()`
+ * method, or read the current value by calling it as a function.
  */
-export const useSignal = (initial) => {
+export const useCell = (initial, choose=stepForward) => {
   const listeners = new Set()
 
-  let state = unwrapComplete(initial)
-  let hasCompleted = isComplete(initial)
+  let state = initial
 
   /**
    * Read current signal state
    */
-  const readSignal = () => state
+  const read = () => state
+  tag(read, __cell__)
 
-  /**
-   * Subscribe to a signal with a listener callback.
-   * Fires once immediately with current value, and then for subsequent values.
-   * Returns a function which may be called to cancel the subscription.
+  /*
+   * Get notified immediately of cell changes.
+   * This method does not uphold atomicity. It is used as an operational
+   * primitive to implement APIs that do uphold atomicity.
    */
-  readSignal.listen = listener => {
+  const listen = listener => {
     listener(state)
-    if (hasCompleted) {
-      return noOp
-    }
     listeners.add(listener)
     return () => {
       listeners.delete(listener)
     }
   }
 
-  tag(readSignal, __signal__)
+  /**
+   * Listen for *immediate* cell changes.
+   * This method is notified immediately and does not uphold state atomicity.
+   * It's used as an operational primitive to implement other APIs that do
+   * uphold atomicity.
+   *
+   * Prefer `listen()` unless you have a specific reason to bypass the
+   * transaction system.
+   */
+  read[__changes__] = listen
+
+  /**
+   * Listen for cell changes.
+   * Fires with reads, upholding atomicity.
+   */
+  read.listen = listener => listen(
+    value => withReads(listener, value, choose)
+  )
+
+  const setState = value => {
+    state = value
+    // Notify listeners immediately
+    for (const listener of listeners) {
+      listener(state)
+    }
+  }
 
   /**
    * Send new value to signal
    */
-  const sendSignal = value => {
-    if (hasCompleted) {
-      return
-    }
+  const send = value => {
     if (state !== value) {
-      // Notify listeners immediately
-      for (const listener of listeners) {
-        listener(value)
-      }
-      if (isComplete(value)) {
-        hasCompleted = true
-        listeners.clear()
-      }
       // Update state during the next transaction. This ensures state updates
       // are atomic and listeners can never observe inconsistent state.
-      // To a listener, all state stays the same. You're always observing
-      // the state *before* it changes.
-      withTransaction(() => state = unwrapComplete(state))
+      withWrites(setState, value)
     }
   }
 
-  return [freeze(readSignal), sendSignal]
+  return [read, send]
+}
+
+export const reductions = (upstream, step, seed) =>
+  listener => {
+    let state = seed
+    return upstream(value => {
+      state = step(state, seed)
+      listener(state)
+    })
+  }
+
+export const map = (upstream, transform) =>
+  listener => upstream(value => listener(transform(value)))
+
+export const filter = (upstream, predicate) =>
+  listener => upstream(value => {
+    if (predicate(value)) {
+      listener(value)
+    }
+  })
+
+export const filterMap = (upstream, transform) =>
+  listener => upstream(value => {
+    const next = transform(value)
+    if (next != null) {
+      listener(next)
+    }
+  })
+
+/**
+ * Index an array of identified items by key.
+ * Since maps are iterated in insertion order, we index once and then
+ * have an ordered keyed collection we can do efficient lookups over.
+ * Useful for modeling child views.
+ * @template Key
+ * @template Item
+ * @param {Iterable<Item>} items 
+ * @param {(item: Item) => Key} getKey 
+ * @returns {Map<Key, Item>} the indexed items
+ */
+export const indexIter = (items, getKey=getId) => {
+  const indexedItems = new Map()
+  for (const item of items) {
+    indexedItems.set(getKey(item), item)
+  }
+  return indexedItems
 }
 
 /**
- * Create a constant signal - a signal for a value that never changes.
- * Signal completes immediately.
+ * Index a stream of iterables by key, returning a stream of `Map`.
+ */
+export const index = (upstream, getKey=getId) => map(
+  upstream,
+  iterable => indexIter(iterable, getKey)
+)
+
+/**
+ * Create a cell from a stream and an initial value.
+ */
+export const hold = (stream, initial) => {
+  const [$state, sendState] = useCell(initial)
+  const cancel = stream(sendState)
+  setCancel($state, cancel)
+  return $state
+}
+
+/**
+ * Create a constant cell - a cell for a value that never changes.
  * @template Value
  * @param {Value} value - the value for constant
- * @returns {Signal<Value>}
+ * @returns {Cell<Value>}
  */
 export const constant = value => {
-  const [$value, _] = useSignal(complete(value))
+  const [$value, _] = useCell(value)
   return $value
 }
 
 /**
- * Box a value in a constant signal if it is not already a signal.
+ * Box a value in a constant cell if it is not already a cell.
  */
-export const wrapSignal = value => isSignal(value) ? value : constant(value)
+export const wrapCell = value => isCell(value) ? value : constant(value)
 
 /**
- * Create a callback that handles values and end using separate
- * callback functions.
- * @returns {(value) => void} a listener callback
+ * filterMap a cell, returning a cell of states that are not null.
  */
-export const subscriber = ({onValue=noOp, onComplete=noOp}) => value => {
-  if (isComplete(value)) {
-    onComplete(value.value)
-    return
-  }
-  onValue(value)
-}
+export const scope = (
+  $cell,
+  transform,
+  initial=transform($cell())
+) => hold(
+  filterMap($cell[__changes__], transform),
+  initial
+)
 
 /**
  * Batch multiple cancel functions into a single function
@@ -232,135 +298,25 @@ export const cancel = object => {
   }
 }
 
-/**
- * Reduce over a signal, creating a new signal.
- * Each update to the upstream signal will call `step` with the previous state
- * and the new usptream signal value, producing a new state on the returned
- * signal.
- */
-export const reductions = ($upstream, step, seed) => {
-  const [$downstream, sendDownstream] = useSignal(seed)
-  const cancel = $upstream.listen(value => {
-    if (isComplete(value)) {
-      const state = step($downstream(), value.value)
-      sendDownstream(wrapComplete(state))
-    } else {
-      const state = step($downstream(), value)
-      // If the stepping function returns a complete, cancel our upstream
-      // subscription. We're done.
-      if (isComplete(state)) {
-        cancel()
-      }
-      sendDownstream(state)
-    }
-  })
-  return $downstream
-}
-
-/** Synonym for reductions */
-export const scan = reductions
-
-/**
- * Map signal, returning a new signal of the transformed values.
- */
-export const map = ($upstream, transform) => reductions(
-  $upstream,
-  (state, value) => transform(value),
-  transform($upstream())
-)
-
-/**
- * Filter signal updates.
- * First value will always be included. Future updates will be ignored if they
- * do not pass predicate.
- */
-export const filter = ($upstream, predicate) => reductions(
-  $upstream,
-  (state, value) => {
-    if (predicate(value)) {
-      return value
-    }
-    return state
-  },
-  $upstream()
-)
-
-/**
- * Take updates until predicate returns false.
- */
-export const takeWhile = ($upstream, predicate) => reductions(
-  $upstream,
-  (state, value) => {
-    if (predicate(value)) {
-      return value
-    }
-    return complete(state)
-  },
-  $upstream()
-)
-
-/**
- * Scope a signal, returning a new signal that will end either when upstream
- * ends, or when `transform()` returns `null`.
- */
-export const compactMap = ($upstream, transform, initial) => reductions(
-  $upstream,
-  (state, value) => {
-    const transformed = transform(value)
-    return transformed ?? state
-  },
-  initial
-)
-
 export const getId = item => item.id
-
-/**
- * Index an array of identified items by key.
- * Since maps are iterated in insertion order, we index once and then
- * have an ordered keyed collection we can do efficient lookups over.
- * Useful for modeling child views.
- * @template Key
- * @template Item
- * @param {Iterable<Item>} items 
- * @param {(item: Item) => Key} getKey 
- * @returns {Map<Key, Item>} the indexed items
- */
-export const index = (items, getKey=getId) => {
-  const indexedItems = new Map()
-  for (const item of items) {
-    indexedItems.set(getKey(item), item)
-  }
-  return indexedItems
-}
-
-/**
- * Index a signal of iterables by key, returning a signal of `Map`.
- */
-export const indexed = ($upstream, getKey=getId) => map(
-  $upstream,
-  iterable => index(iterable, getKey)
-)
 
 /**
  * Batch signal on some queue
  */
-const batchStreamOn = ($upstream, queue) => {
-  const [$downstream, sendDownstream] = useSignal($upstream())
-  const transact = batchScheduler(sendDownstream, queue)
-  $upstream.listen(transact)
-  return $downstream
+const batchWith = (upstream, queue=queueMicrotask) => listener => {
+  const schedule = batchScheduler(queue)
+  upstream(value => schedule(() => listener(value)))
 }
 
 /**
  * Batch signal on microtask
  */
-export const batch = $upstream => batchStreamOn($upstream, queueMicrotask)
+export const batch = upstream => batchWith(upstream, queueMicrotask)
 
 /**
  * Batch signal on animation frame
  */
-export const animate = $upstream =>
-  batchStreamOn($upstream, requestAnimationFrame)
+export const animate = upstream => batchWith(upstream, requestAnimationFrame)
 
 /**
  * Given two values, choose the next one.
@@ -368,49 +324,18 @@ export const animate = $upstream =>
 export const pair = (left, right) => [left, right]
 
 /**
- * Merge two streams, using `combine` to merge signal values into a
- * single value.
+ * Merge two cells, using `combine` to merge values into a single value.
  */
 export const merge = ($left, $right, combine=pair) => {
-  let leftState = $left()
-  let rightState = $right()
-  let endCount = 0
+  const [$downstream, sendDownstream] = useCell(combine($left(), $right()))
 
-  const [$downstream, sendDownstream] = useSignal(
-    combine(leftState, rightState)
-  )
+  const listen = () => sendDownstream(combine($left(), $right()))
 
-  $left.listen(
-    subscriber({
-      onValue: left => {
-        leftState = left
-        sendDownstream(combine(leftState, rightState))
-      },
-      onComplete: left => {
-        endCount++
-        leftState = left
-        const next = combine(leftState, rightState)
-        sendDownstream(endCount > 1 ? wrapComplete(next) : next)
-      }
-    })
-  )
+  const cancelLeft = $left[__changes__](listen)
+  const cancelRight = $right[__changes__](listen)
+  const cancel = batchCancels(cancelLeft, cancelRight)
 
-  $right.listen(
-    subscriber({
-      onValue: right => {
-        rightState = right
-        sendDownstream(combine(leftState, rightState))
-      },
-      onComplete: right => {
-        endCount++
-        rightState = right
-        const next = combine(leftState, rightState)
-        sendDownstream(endCount > 1 ? wrapComplete(next) : next)
-      }
-    })
-  )
-
-  return batch($downstream)
+  return [$downstream, cancel]
 }
 
 /**
@@ -430,7 +355,7 @@ export const useStore = ({
     console.debug('useStore.effects', initial.effects.length)
   }
 
-  const [$state, sendState] = useSignal(initial.state)
+  const [$state, sendState] = useCell(initial.state)
 
   const send = msg => {
     const {state: next, effects} = update($state(), msg)

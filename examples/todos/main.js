@@ -1,6 +1,6 @@
 import {
-  map,
-  indexed,
+  scope,
+  indexIter,
   animate,
   pipe,
   useStore,
@@ -16,15 +16,15 @@ import {
   cid
 } from '../../dom.js'
 
-const action = {}
+const msg = {}
 
-action.complete = id => ({
+msg.complete = id => ({
   type: 'complete',
   id
 })
 
-action.updateInput = value => ({type: 'updateInput', value})
-action.submitInput = value => ({type: 'submitInput', value})
+msg.updateInput = value => ({type: 'updateInput', value})
+msg.submitInput = value => ({type: 'submitInput', value})
 
 const modelTodo = ({
   id=cid(),
@@ -37,11 +37,11 @@ const modelTodo = ({
 })
 
 const viewTodo = ($todo, send) => {
-  const $text = map($todo, todo => todo.text)
+  const $text = scope($todo, todo => todo.text)
 
-  const $buttonProps = map($todo, todo => ({
+  const $buttonProps = scope($todo, todo => ({
     className: 'button-done',
-    onclick: () => send(action.complete(todo.id, true))
+    onclick: () => send(msg.complete(todo.id, true))
   }))
 
   return h(
@@ -65,12 +65,12 @@ const viewTodo = ($todo, send) => {
 const modelInput = ({text=''}) => ({text})
 
 const viewInput = ($input, send) => {
-  const $props = map($input, input => ({
+  const $props = scope($input, input => ({
     value: input.text,
-    oninput: event => send(action.updateInput(event.target.value)),
+    oninput: event => send(msg.updateInput(event.target.value)),
     onkeyup: event => {
       if (event.key === 'Enter') {
-        send(action.submitInput(event.target.value))
+        send(msg.submitInput(event.target.value))
       }
     },
     type: 'text',
@@ -82,19 +82,16 @@ const viewInput = ($input, send) => {
 
 const modelApp = ({
   input=modelInput({}),
-  todos=[]
+  todos=new Map()
 }) => ({
   input,
   todos
 })
 
 const viewApp = ($state, send) => {
-  const $input = map($state, state => state.input)
+  const $input = scope($state, state => state.input)
 
-  const $todos = pipe(
-    map($state, state => state.todos),
-    indexed
-  )
+  const $todos = scope($state, state => state.todos)
 
   return h(
     'div',
@@ -135,18 +132,24 @@ const updateInput = (state, text) => next({
 const submitInput = (state, text) => next({
   ...state,
   input: modelInput({text: ''}),
-  todos: [
-    ...state.todos,
+  todos: indexIter([
+    ...state.todos.values(),
     modelTodo({text})
-  ]
+  ])
 })
 
-const complete = (state, id) => next(
-  {
-    ...state,
-    todos: state.todos.filter(todo => todo.id !== id)
+const complete = (state, id) => {
+  if (!state.todos.has(id)) {
+    console.log("No item for ID. Doing nothing.", id)
+    return next(state)
   }
-)
+  const todos = new Map(state.todos)
+  todos.delete(id)
+  return next({
+    ...state,
+    todos
+  })
+}
 
 const [$state, send] = useStore({
   init,
@@ -156,5 +159,5 @@ const [$state, send] = useStore({
 
 window.$state = $state
 
-const appEl = viewApp(animate($state), send)
+const appEl = viewApp($state, send)
 document.body.append(appEl)

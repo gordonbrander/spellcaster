@@ -1,8 +1,9 @@
 import {
-  compactMap,
-  wrapSignal,
+  scope,
+  wrapCell,
   setCancel,
-  unwrapComplete,
+  cancel,
+  __cancel__,
   noOp
 } from './tendril.js'
 
@@ -25,9 +26,7 @@ export const cid = () => `cid${_cid++}`
 const __key__ = Symbol('list item key')
 
 export const list = (view, $states, send) => parent => {
-  const cancel = $states.listen(states => {
-    let i = 0
-
+  const cancelStates = $states.listen(states => {
     // Build an index of children and a list of children to remove.
     // Note that we must build a list of children to remove, since
     // removing in-place would change the live node list and bork iteration.
@@ -45,23 +44,27 @@ export const list = (view, $states, send) => parent => {
       parent.removeChild(child)
     }
 
+    let i = 0
     for (const key of states.keys()) {
       const index = i++
       const child = children.get(key)
       if (child != null) {
         insertElementAt(parent, child, index)
       } else {
-        const state = states.get(key)
-        const child = view(
-          compactMap($states, states => states.get(key), state),
-          send
+        const $state = scope(
+          $states,
+          states => states.get(key),
+          states.get(key)
         )
+        const child = view($state, send)
+        const cancelState = $state[__cancel__]
+        setCancel(child, cancelState)
         child[__key__] = key
         insertElementAt(parent, child, index)
       }
     }
   })
-  setCancel(parent, cancel)
+  setCancel(parent, cancelStates)
   return parent
 }
 
@@ -90,8 +93,8 @@ export const children = (...children) => parent => {
 }
 
 export const text = text => parent => {
-  const cancel = wrapSignal(text)
-    .listen(text => parent.textContent = unwrapComplete(text))
+  const cancel = wrapCell(text)
+    .listen(text => parent.textContent = text)
   setCancel(parent, cancel)
   return parent
 }
@@ -99,8 +102,8 @@ export const text = text => parent => {
 export const h = (tag, properties, configure=noOp) => {
   const element = document.createElement(tag)
 
-  const cancel = wrapSignal(properties)
-    .listen(value => props(element, unwrapComplete(value)))
+  const cancel = wrapCell(properties)
+    .listen(value => props(element, value))
   setCancel(element, cancel)
 
   configure(element)
