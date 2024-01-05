@@ -1,8 +1,6 @@
 import {
-  useCell,
-  useComputed,
   useEffect,
-  takeWhileValue,
+  takeValues,
   sample
 } from './tendril.js'
 
@@ -60,7 +58,7 @@ export const list = (view, states, send) => parent => {
         insertElementAt(parent, child, index)
       } else {
         const child = view(
-          takeWhileValue(() => states().get(key)),
+          takeValues(() => states().get(key)),
           send
         )
         child[__key__] = key
@@ -95,6 +93,9 @@ export const children = (...children) => parent => {
   }
 }
 
+/**
+ * Write a signal of strings to the text content of a parent element.
+ */
 export const text = text => parent => {
   useEffect(() => {
     parent.textContent = sample(text) ?? ''
@@ -104,6 +105,10 @@ export const text = text => parent => {
 
 const noOp = () => {}
 
+/**
+ * Signals-aware hyperscript.
+ * Create an element that can be updated with signals.
+ */
 export const h = (tag, properties, configure=noOp) => {
   const element = document.createElement(tag)
 
@@ -141,7 +146,7 @@ const LAYOUT_TRIGGERING_PROPS = new Set(['innerText'])
  */
 export const setProp = (object, key, value) => {
   if (LAYOUT_TRIGGERING_PROPS.has(key)) {
-    console.warn(`Checking property value for ${key} triggers layout. Consider writing to this property without using prop().`)
+    console.warn(`Checking property value for ${key} triggers layout. Consider writing to this property without using setProp().`)
   }
 
   if (object[key] !== value) {
@@ -150,6 +155,14 @@ export const setProp = (object, key, value) => {
 }
 
 const setProps = (element, props) => {
+  const attrs = element.getAttributeNames()
+  // Reset properties not present in `props` by looking at attributes and
+  // removing them if there is not a corresponding key in props.
+  for (const key of attrs) {
+    if (props[key] == null) {
+      element.removeAttribute(key)
+    }
+  }
   for (const [key, value] of Object.entries(props)) {
     setProp(element, key, value)
   }

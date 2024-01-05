@@ -1,11 +1,10 @@
 import {
-  isCell,
-  useCell,
+  useSignal,
   useComputed,
   useEffect
 } from '../../tendril.js'
 
-const [clock, sendClock] = useCell(Date.now())
+const [clock, sendClock] = useSignal(Date.now())
 
 const a = useComputed(() => clock() + Math.random())
 const b = useComputed(() => clock() + Math.random())

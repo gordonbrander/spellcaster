@@ -1,36 +1,16 @@
 /**
- * Create a batch scheduler that will run the last callback that is scheduled.
+ * Creates a dependency tracker
+ * We use this to allow signals to automatically gather their downstream
+ * dependencies.
  */
-export const batchScheduler = (queue=queueMicrotask) => {
-  let isScheduled = false
-  let job = null
-
-  const performBatch = () => {
-    if (job != null) {
-      job()
-    }
-    isScheduled = false
-  }
-
-  const schedule = callback => {
-    if (!isScheduled) {
-      isScheduled = true
-      queue(performBatch)
-    }
-    job = callback
-  }
-
-  return schedule
-}
-
 const dependencyTracker = () => {
   const scopes = []
 
   const getTracked = () => scopes.at(-1)
 
-  const withTracking = (onChange, callback) => {
+  const withTracking = (onChange, perform) => {
     scopes.push(onChange)
-    const value = callback()
+    const value = perform()
     scopes.pop()
     return value
   }
@@ -40,52 +20,90 @@ const dependencyTracker = () => {
 
 const {withTracking, getTracked} = dependencyTracker()
 
-let _cid = 0
+/**
+ * Given a zero-argument function, create a throttled version of that function
+ * that will run only once per microtask.
+ * @param {() => void} job - the function to perform
+ * @returns {() => void} - a throttled version of that function
+ */
+export const throttled = job => {
+  let isScheduled = false
 
-export const cid = () => `cid${_cid++}`
+  const perform = () => {
+    job()
+    isScheduled = false
+  }
 
-const notification = () => {
-  const listeners = new Set()
-  const id = cid()
-
-  const listenOnce = listener => {
-    if (typeof listener === 'function') {
-      listeners.add(listener)
-      console.log("listenOnce", id, Array.from(listeners))
+  const schedule = () => {
+    if (!isScheduled) {
+      isScheduled = true
+      queueMicrotask(perform)
     }
   }
 
-  const dispatch = () => {
-    for (const listener of listeners) {
-      // We dispatch listener with next microtask. Otherwise gathered
-      // dependencies would be added in the loop, causing them to be
-      // cleared after loop exits.
-      queueMicrotask(listener)
-    }
-    console.log("dispatch", id, Array.from(listeners))
-    listeners.clear()
-  }
-
-  return {listenOnce, dispatch}
+  return schedule
 }
 
 /**
- * Is value a cell-like function?
+ * Create a transaction notification publisher.
+ * Allows you to register listeners that are called once during the next
+ * transaction.
  */
-export const isCell = value =>
-  (typeof value === 'function' && value.length === 0)
+const transaction = () => {
+  let transaction = new Set()
 
-export const sample = value => isCell(value) ? value() : value
+  /**
+   * Add listener to current transaction.
+   * Listener functions are deduped. E.g. if you add the same listener twice to
+   * the same transaction, it's only added once.
+   */
+  const withTransaction = listener => {
+    if (typeof listener === 'function') {
+      transaction.add(listener)
+    }
+  }
+
+  /**
+   * Perform a transaction.
+   * Listeners in transaction are notified once and then forgotten.
+   */
+  const transact = () => {
+    // Capture transaction
+    const listeners = transaction
+    // Create a new transaction. This transaction will gather dependencies
+    // queued while executing listeners.
+    transaction = new Set()
+    // Perform transaction.
+    for (const listener of listeners) {
+      listener()
+    }
+    // Listeners are released after scope exits so they can be garbaged.
+  }
+
+  return {withTransaction, transact}
+}
 
 /**
- * A cell is a reactive state container. It holds a single value which is
+ * Is value a signal-like function?
+ * A signal is any zero-argument function.
+ */
+export const isSignal = value =>
+  (typeof value === 'function' && value.length === 0)
+
+/**
+ * Sample a value that may be a signal, or just an ordinary value
+ */
+export const sample = value => isSignal(value) ? value() : value
+
+/**
+ * A signal is a reactive state container. It holds a single value which is
  * updated atomically.
  *
- * Consumers may subscribe to cell update events with the `listen()`
+ * Consumers may subscribe to signal update events with the `listen()`
  * method, or read the current value by calling it as a function.
  */
-export const useCell = initial => {
-  const didChange = notification()
+export const useSignal = initial => {
+  const didChange = transaction()
 
   let state = initial
 
@@ -93,7 +111,7 @@ export const useCell = initial => {
    * Read current signal state
    */
   const read = () => {
-    didChange.listenOnce(getTracked())
+    didChange.withTransaction(getTracked())
     return state
   }
 
@@ -103,7 +121,7 @@ export const useCell = initial => {
   const send = value => {
     if (state !== value) {
       state = value
-      didChange.dispatch()
+      didChange.transact()
     }
   }
 
@@ -111,34 +129,38 @@ export const useCell = initial => {
 }
 
 export const useComputed = compute => {
-  const didChange = notification()
-  const schedule = batchScheduler()
+  const didChange = transaction()
 
-  const recompute = () => {
-    const value = withTracking(scheduleRecompute, compute)
+  // We batch recomputes to solve the diamond problem.
+  // Every upstream signal read within the computed's tracking scope can
+  // independently generate a change notification. This means if two upstream
+  // signals change at once, our transaction callback gets called twice.
+  // By scheduling batch updates on the next microtask, we ensure that the
+  // computed signal is recomputed only once per event loop turn.
+  const recompute = throttled(() => {
+    const value = withTracking(recompute, compute)
     if (state !== value) {
       state = value
-      didChange.dispatch()
+      didChange.transact()
     }
-  }
-
-  const scheduleRecompute = () => schedule(recompute)
+  })
 
   const read = () => {
-    didChange.listenOnce(getTracked())
+    didChange.withTransaction(getTracked())
     return state
   }
 
-  let state = withTracking(scheduleRecompute, compute)
+  let state = withTracking(recompute, compute)
 
   return read
 }
 
-export const useEffect = run => {
-  const performTrackedEffect = () => {
-    withTracking(performTrackedEffect, run)
-  }
-  withTracking(performTrackedEffect, run)
+export const useEffect = perform => {
+  const performEffect = throttled(() => {
+    withTracking(performEffect, perform)
+  })
+
+  withTracking(performEffect, perform)
 }
 
 /**
@@ -158,7 +180,7 @@ export const useStore = ({
     console.debug('useStore.effects', initial.effects.length)
   }
 
-  const [state, sendState] = useCell(initial.state)
+  const [state, sendState] = useSignal(initial.state)
 
   const send = msg => {
     const {state: next, effects} = update(state(), msg)
@@ -200,9 +222,19 @@ export const unknown = (state, msg) => {
   return next(state)
 }
 
-
-export const takeWhileValue = cell => {
-  let state = cell()
+/**
+ * Transform a signal, returning a computed signal that takes values until
+ * the given signal returns null. Once the given signal returns null, the
+ * signal is considered to be complete and no further updates will occur.
+ *
+ * This utility is useful for signals representing a child in a dynamic collection
+ * of children, where the child may cease to exist.
+ * A computed signal looks up the child, returns null if that child no longer
+ * exists. This completes the signal and breaks the connection with upstream
+ * signals, allowing the child signal to be garbaged.
+ */
+export const takeValues = signal => {
+  let state = signal()
   let isComplete = false
 
   return useComputed(() => {
@@ -210,7 +242,7 @@ export const takeWhileValue = cell => {
       return state
     }
 
-    const next = cell()
+    const next = signal()
 
     if (next != null) {
       state = next
