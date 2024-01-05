@@ -105,7 +105,7 @@ const transaction = () => {
  * A signal is any zero-argument function.
  * @template T
  * @param {T|(() => T)} value
- * @returns {Boolean}
+ * @returns {boolean}
  */
 export const isSignal = value =>
   (typeof value === 'function' && value.length === 0)
@@ -248,7 +248,7 @@ export const next = (state, effects=[]) => ({state, effects})
  * @param {object} options
  * @param {() => Transaction<State, Msg>} options.init
  * @param {(state: State, msg: Msg) => Transaction<State, Msg>} options.update
- * @param {Boolean} options.debug - turn on debug console logging?
+ * @param {boolean} options.debug - turn on debug console logging?
  * @returns {[() => State, (msg: Msg) => void]}
  */
 export const store = ({
