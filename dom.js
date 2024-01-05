@@ -1,5 +1,5 @@
 import {
-  useEffect,
+  effect,
   takeValues,
   sample
 } from './tendril.js'
@@ -33,7 +33,7 @@ export const index = (iter, getKey=getId) => {
 const __key__ = Symbol('list item key')
 
 export const list = (view, states, send) => parent => {
-  useEffect(() => {
+  effect(() => {
     // Build an index of children and a list of children to remove.
     // Note that we must build a list of children to remove, since
     // removing in-place would change the live node list and bork iteration.
@@ -97,7 +97,7 @@ export const children = (...children) => parent => {
  * Write a signal of strings to the text content of a parent element.
  */
 export const text = text => parent => {
-  useEffect(() => {
+  effect(() => {
     parent.textContent = sample(text) ?? ''
   })
   return parent
@@ -112,7 +112,7 @@ const noOp = () => {}
 export const h = (tag, properties, configure=noOp) => {
   const element = document.createElement(tag)
 
-  useEffect(() => {
+  effect(() => {
     setProps(element, sample(properties))
   })
 

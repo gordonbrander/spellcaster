@@ -1,18 +1,18 @@
 import {
-  useSignal,
-  useComputed,
-  useEffect
+  signal,
+  computed,
+  effect
 } from '../../tendril.js'
 
-const [clock, sendClock] = useSignal(Date.now())
+const [clock, sendClock] = signal(Date.now())
 
-const a = useComputed(() => clock() + Math.random())
-const b = useComputed(() => clock() + Math.random())
-const c = useComputed(() => a() + b())
+const a = computed(() => clock() + Math.random())
+const b = computed(() => clock() + Math.random())
+const c = computed(() => a() + b())
 
 console.log("message should only log once per change")
 
-useEffect(() => {
+effect(() => {
   console.log(
     `n: ${c()}`
   )

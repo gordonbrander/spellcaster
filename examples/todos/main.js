@@ -1,5 +1,5 @@
 import {
-  useStore,
+  store,
   next,
   unknown
 } from '../../tendril.js'
@@ -139,13 +139,13 @@ const complete = (state, id) => {
   })
 }
 
-const [$state, send] = useStore({
+const [state, send] = store({
   init,
   update,
   debug: true
 })
 
-window.$state = $state
+window.state = state
 
-const appEl = viewApp($state, send)
+const appEl = viewApp(state, send)
 document.body.append(appEl)

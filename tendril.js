@@ -102,7 +102,7 @@ export const sample = value => isSignal(value) ? value() : value
  * Consumers may subscribe to signal update events with the `listen()`
  * method, or read the current value by calling it as a function.
  */
-export const useSignal = initial => {
+export const signal = initial => {
   const didChange = transaction()
 
   let state = initial
@@ -128,7 +128,7 @@ export const useSignal = initial => {
   return [read, send]
 }
 
-export const useComputed = compute => {
+export const computed = compute => {
   const didChange = transaction()
 
   // We batch recomputes to solve the diamond problem.
@@ -155,7 +155,7 @@ export const useComputed = compute => {
   return read
 }
 
-export const useEffect = perform => {
+export const effect = perform => {
   const performEffect = throttled(() => {
     withTracking(performEffect, perform)
   })
@@ -169,25 +169,25 @@ export const useEffect = perform => {
  * Store is inspired by the Elm App Architecture Pattern.
  * @returns {[Signal<State>, (msg: Msg) => void]}
  */
-export const useStore = ({
+export const store = ({
   init,
   update,
   debug=false
 }) => {
   const initial = init()
   if (debug) {
-    console.debug('useStore.state', initial.state)
-    console.debug('useStore.effects', initial.effects.length)
+    console.debug('store.state', initial.state)
+    console.debug('store.effects', initial.effects.length)
   }
 
-  const [state, sendState] = useSignal(initial.state)
+  const [state, sendState] = signal(initial.state)
 
   const send = msg => {
     const {state: next, effects} = update(state(), msg)
     if (debug) {
-      console.debug('useStore.msg', msg)
-      console.debug('useStore.state', next)
-      console.debug('useStore.effects', effects.length)
+      console.debug('store.msg', msg)
+      console.debug('store.state', next)
+      console.debug('store.effects', effects.length)
     }
     sendState(next)
     runEffects(effects)
@@ -233,16 +233,16 @@ export const unknown = (state, msg) => {
  * exists. This completes the signal and breaks the connection with upstream
  * signals, allowing the child signal to be garbaged.
  */
-export const takeValues = signal => {
-  let state = signal()
+export const takeValues = valueSignal => {
+  let state = valueSignal()
   let isComplete = false
 
-  return useComputed(() => {
+  return computed(() => {
     if (isComplete) {
       return state
     }
 
-    const next = signal()
+    const next = valueSignal()
 
     if (next != null) {
       state = next
