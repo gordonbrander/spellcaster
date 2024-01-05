@@ -22,5 +22,3 @@ setInterval(
   () => sendClock(Date.now()),
   1000
 )
-
-window.temp = {a, b, c}
