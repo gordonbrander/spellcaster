@@ -316,12 +316,18 @@ export const unknown = (state, msg) => {
  * signals, allowing the child signal to be garbaged.
  * 
  * @template T
- * @param {() => T} signalT - a signal
+ * @param {() => (T|undefined|null)} signalT - a signal
  * @returns {() => T} - a signal that stops listening and changing after
  *   `signalT` returns null.
  */
 export const takeValues = signalT => {
-  let state = signalT()
+  const initial = signalT()
+
+  if (initial == null) {
+    throw new TypeError("Signal initial value cannot be null")
+  }
+
+  let state = initial
   let isComplete = false
 
   return computed(() => {

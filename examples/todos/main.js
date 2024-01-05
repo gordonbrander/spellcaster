@@ -1,5 +1,6 @@
 import {
   store,
+  computed,
   next,
   unknown
 } from '../../tendril.js'
@@ -84,13 +85,13 @@ const viewApp = (state, send) => h(
   {className: 'app'},
   children(
     viewInput(
-      () => state().input,
+      computed(() => state().input),
       send
     ),
     h(
       'div',
       {className: 'todos'},
-      list(viewTodo, () => state().todos, send)
+      list(viewTodo, computed(() => state().todos), send)
     )
   )
 )

@@ -1,3 +1,4 @@
+// @ts-check
 import {
   effect,
   takeValues,
@@ -19,6 +20,14 @@ export const cid = () => `cid${_cid++}`
 
 export const getId = object => object.id
 
+/**
+ * Index an iterable of items by key, returning a map.
+ * @template Item
+ * @template Key
+ * @param {Iterable<Item>} iter 
+ * @param {(item: Item) => Key} getKey 
+ * @returns {Map<Key, Item>}
+ */
 export const index = (iter, getKey=getId) => {
   const indexed = new Map()
   for (const item of iter) {
@@ -32,6 +41,15 @@ export const index = (iter, getKey=getId) => {
  */
 const __key__ = Symbol('list item key')
 
+/**
+ * @template Item
+ * @template Key
+ * @template Msg
+ * @param {(state: () => Item, send: (msg: Msg) => void) => HTMLElement} view 
+ * @param {() => Map<Key, Item>} states
+ * @param {(msg: Msg) => void} send 
+ * @returns {(parent: HTMLElement) => void}
+ */
 export const list = (view, states, send) => parent => {
   effect(() => {
     // Build an index of children and a list of children to remove.
@@ -66,7 +84,6 @@ export const list = (view, states, send) => parent => {
       }
     }
   })
-  return parent
 }
 
 /**
@@ -108,6 +125,12 @@ const noOp = () => {}
 /**
  * Signals-aware hyperscript.
  * Create an element that can be updated with signals.
+ * @param {string} tag - the HTML element type to create
+ * @param {(() => object)|object} properties - a signal or object containing
+ *   properties to set on the element.
+ * @param {(element: HTMLElement) => void} configure - a function called with
+ *   the element allowing for further configuration.
+ * @returns {HTMLElement}
  */
 export const h = (tag, properties, configure=noOp) => {
   const element = document.createElement(tag)
@@ -154,6 +177,11 @@ export const setProp = (object, key, value) => {
   }
 }
 
+/**
+ * Set properties on an element, but only if the value has actually changed.
+ * @param {HTMLElement} element 
+ * @param {object} props
+ */
 const setProps = (element, props) => {
   const attrs = element.getAttributeNames()
   // Reset properties not present in `props` by looking at attributes and
