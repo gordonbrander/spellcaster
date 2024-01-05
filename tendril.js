@@ -1,392 +1,275 @@
-const set = (object, key, value) => {
-  object[key] = value
-  return object
-}
+// @ts-check
 
 /**
- * Symbol key for tags. We use tags as a userspace version of types.
+ * Creates a dependency tracker
+ * We use this to allow signals to automatically gather their downstream
+ * dependencies.
  */
-export const __tag__ = Symbol('tag')
-
-/**
- * Tag a value, marking it as belonging to some kind.
- */
-export const tag = (object, tag) => set(object, __tag__, tag)
-
-/**
- * Check if value has been tagged with `tag`.
- */
-export const isTagged = (object, tag) => object[__tag__] === tag
-
-/**
- * Sentinal value for ending a stream/publisher
- */
-export const __complete__ = Symbol('complete')
-
-/**
- * Box a value in the sentinal type `complete`.
- */
-export const complete = value => tag({value}, __complete__)
-
-/**
- * Is value a complete sentinal value?
- */
-export const isComplete = value => isTagged(value, __complete__)
-
-/**
- * Unwrap a value if it is a complete sentinal value,
- * or else just return the value.
- */
-export const unwrapComplete = value => isComplete(value) ? value.value : value
-
-export const wrapComplete = value => isComplete(value) ? value : complete(value)
-
-/**
- * Symbol for tagging a signal
- */
-export const __signal__ = Symbol('signal')
-
-/**
- * Is value a signal?
- */
-export const isSignal = value => isTagged(value, __signal__)
-
-/**
- * Default callback that does nothing.
- */
-export const noOp = () => {}
-
-const freeze = Object.freeze
-
-/**
- * A signal is a reactive state container. It holds a single value which is
- * updated atomically with transactions.
- *
- * Consumers may subscribe to read atomic state changes with the `sink()`
- * method, or read the current value of the signal by calling it as a function.
- */
-export const useSignal = initial => {
-  const listeners = new Set()
-
-  let state = unwrapComplete(initial)
-  let hasCompleted = isComplete(initial)
+const dependencyTracker = () => {
+  /** @type {Array<() => void>} */
+  const scopes = []
 
   /**
-   * Read current signal state
+   * Get the current tracked scope
+   * @returns {(() => void)|null}
    */
-  const readSignal = () => state
+  const getTracked = () => scopes[scopes.length - 1]
 
   /**
-   * Subscribe to a signal with a listener callback.
-   * Fires once immediately with current value, and then for subsequent values.
-   * Returns a function which may be called to cancel the subscription.
+   * @template T
+   * @param {() => void} onChange the scope to set. A callback to be notified
+   *   during the next transaction.
+   * @param {() => T} perform a function to perform immediately while scope
+   *   is set.
+   * @returns {T} the value returned by perform
    */
-  readSignal.listen = listener => {
-    listener(state)
-    if (hasCompleted) {
-      return noOp
-    }
-    listeners.add(listener)
-    return () => {
-      listeners.delete(listener)
-    }
+  const withTracking = (onChange, perform) => {
+    scopes.push(onChange)
+    const value = perform()
+    scopes.pop()
+    return value
   }
 
-  tag(readSignal, __signal__)
-
-  const publish = value => {
-    for (const listener of listeners) {
-      listener(value)
-    }
-  }
-
-  /**
-   * Send new value to signal
-   */
-  const sendSignal = value => {
-    if (hasCompleted) {
-      return
-    }
-    if (state !== value) {
-      if (isComplete(value)) {
-        state = value.value
-        hasCompleted = true
-        publish(value)
-        listeners.clear()
-      } else {
-        state = value
-        publish(value)
-      }
-    }
-  }
-
-  return [freeze(readSignal), sendSignal]
+  return {withTracking, getTracked}
 }
 
-/**
- * Create a constant signal - a signal for a value that never changes.
- * Signal completes immediately.
- * @template Value
- * @param {Value} value - the value for constant
- * @returns {Signal<Value>}
- */
-export const constant = value => {
-  const [$value, _] = useSignal(complete(value))
-  return $value
-}
+const {withTracking, getTracked} = dependencyTracker()
 
 /**
- * Box a value in a constant signal if it is not already a signal.
+ * Given a zero-argument function, create a throttled version of that function
+ * that will run only once per microtask.
+ * @param {() => void} job - the function to perform
+ * @returns {() => void} - a throttled version of that function
  */
-export const wrapSignal = value => isSignal(value) ? value : constant(value)
-
-/**
- * Create a callback that handles values and end using separate
- * callback functions.
- * @returns {(value) => void} a listener callback
- */
-export const subscriber = ({onValue=noOp, onComplete=noOp}) => value => {
-  if (isComplete(value)) {
-    onComplete(value.value)
-    return
-  }
-  onValue(value)
-}
-
-/**
- * Batch multiple cancel functions into a single function
- */
-export const batchCancels = (...cancels) => {
-  return () => {
-    for (const cancel of cancels) {
-      cancel()
-    }
-    cancels.length = 0
-  }
-}
-
-export const __cancel__ = Symbol('cancel')
-
-export const setCancel = (object, cancel) => set(object, __cancel__, cancel)
-
-export const cancel = object => {
-  const cancel = object[__cancel__]
-  if (typeof cancel === 'function') {
-    cancel()
-  }
-}
-
-/**
- * Reduce over a signal, creating a new signal.
- * Each update to the upstream signal will call `step` with the previous state
- * and the new usptream signal value, producing a new state on the returned
- * signal.
- */
-export const reductions = ($upstream, step, seed) => {
-  const [$downstream, sendDownstream] = useSignal(seed)
-  const cancel = $upstream.listen(value => {
-    if (isComplete(value)) {
-      const state = step($downstream(), value.value)
-      sendDownstream(wrapComplete(state))
-    } else {
-      const state = step($downstream(), value)
-      // If the stepping function returns a complete, cancel our upstream
-      // subscription. We're done.
-      if (isComplete(state)) {
-        cancel()
-      }
-      sendDownstream(state)
-    }
-  })
-  return $downstream
-}
-
-/** Synonym for reductions */
-export const scan = reductions
-
-/**
- * Map signal, returning a new signal of the transformed values.
- */
-export const map = ($upstream, transform) => reductions(
-  $upstream,
-  (state, value) => transform(value),
-  transform($upstream())
-)
-
-/**
- * Filter signal updates.
- * First value will always be included. Future updates will be ignored if they
- * do not pass predicate.
- */
-export const filter = ($upstream, predicate) => reductions(
-  $upstream,
-  (state, value) => {
-    if (predicate(value)) {
-      return value
-    }
-    return state
-  },
-  $upstream()
-)
-
-/**
- * Take updates until predicate returns false.
- */
-export const takeWhile = ($upstream, predicate) => reductions(
-  $upstream,
-  (state, value) => {
-    if (predicate(value)) {
-      return value
-    }
-    return complete(state)
-  },
-  $upstream()
-)
-
-/**
- * Scope a signal, returning a new signal that will end either when upstream
- * ends, or when `transform()` returns `null`.
- */
-export const scope = ($upstream, transform) => reductions(
-  $upstream,
-  (state, value) => {
-    const transformed = transform(value)
-    if (transformed == null) {
-      return complete(state)
-    }
-    return transformed
-  },
-  transform($upstream())
-)
-
-export const getId = item => item.id
-
-/**
- * Index an array of identified items by key.
- * Since maps are iterated in insertion order, we index once and then
- * have an ordered keyed collection we can do efficient lookups over.
- * Useful for modeling child views.
- * @template Key
- * @template Item
- * @param {Iterable<Item>} items 
- * @param {(item: Item) => Key} getKey 
- * @returns {Map<Key, Item>} the indexed items
- */
-export const index = (items, getKey=getId) => {
-  const indexedItems = new Map()
-  for (const item of items) {
-    indexedItems.set(getKey(item), item)
-  }
-  return indexedItems
-}
-
-/**
- * Index a signal of iterables by key, returning a signal of `Map`.
- */
-export const indexed = ($upstream, getKey=getId) => map(
-  $upstream,
-  iterable => index(iterable, getKey)
-)
-
-/**
- * Transform a thunk so that it runs only once per microtask, no matter how
- * often it is called.
- */
-export const batchWith = (callback, queue=queueMicrotask) => {
+export const throttled = job => {
   let isScheduled = false
-  let value = null
-  
-  const performBatch = () => {
-    callback(value)
+
+  const perform = () => {
+    job()
     isScheduled = false
   }
 
-  const schedule = next => {
+  const schedule = () => {
     if (!isScheduled) {
       isScheduled = true
-      queue(performBatch)
+      queueMicrotask(perform)
     }
-    value = next
   }
 
   return schedule
 }
 
 /**
- * Batch signal on some queue
+ * Create a transaction notification publisher.
+ * Allows you to register listeners that are called once during the next
+ * transaction.
  */
-const batchOn = ($upstream, queue) => {
-  const [$downstream, sendDownstream] = useSignal($upstream())
-  const transact = batchWith(sendDownstream, queue)
-  $upstream.listen(transact)
-  return $downstream
-}
+const transaction = () => {
+  /** @type {Set<(() => void)>} */
+  let transaction = new Set()
 
-/**
- * Batch signal on microtask
- */
-export const batch = $upstream => batchOn($upstream, queueMicrotask)
-
-/**
- * Batch signal on animation frame
- */
-export const animate = $upstream => batchOn($upstream, requestAnimationFrame)
-
-/**
- * Given two values, choose the next one.
- */
-export const pair = (left, right) => [left, right]
-
-/**
- * Merge two streams, using `combine` to merge signal values into a
- * single value.
- */
-export const merge = ($left, $right, combine=pair) => {
-  const [$downstream, sendDownstream] = useSignal(combine($left(), $right()))
-
-  const onValue = _ => sendDownstream(combine($left(), $right()))
-
-  let endCount = 0
-
-  const onComplete = _ => {
-    endCount++
-    const next = combine($left(), $right())
-    sendDownstream(endCount > 1 ? wrapComplete(next) : next)
+  /**
+   * Add listener to current transaction.
+   * Listener functions are deduped. E.g. if you add the same listener twice to
+   * the same transaction, it's only added once.
+   * @param {(() => void)|null} listener
+   */
+  const withTransaction = listener => {
+    if (typeof listener === 'function') {
+      transaction.add(listener)
+    }
   }
 
-  const listener = subscriber({onValue, onComplete})
+  /**
+   * Perform a transaction.
+   * Listeners in transaction are notified once and then forgotten.
+   */
+  const transact = () => {
+    // Capture transaction
+    const listeners = transaction
+    // Create a new transaction. This transaction will gather dependencies
+    // queued while executing listeners.
+    transaction = new Set()
+    // Perform transaction.
+    for (const listener of listeners) {
+      listener()
+    }
+    // Listeners are released after scope exits so they can be garbaged.
+  }
 
-  $left.listen(listener)
-  $right.listen(listener)
-
-  return batch($downstream)
+  return {withTransaction, transact}
 }
+
+/**
+ * Is value a signal-like function?
+ * A signal is any zero-argument function.
+ * @template T
+ * @param {T|(() => T)} value
+ * @returns {Boolean}
+ */
+export const isSignal = value =>
+  (typeof value === 'function' && value.length === 0)
+
+/**
+ * Sample a value that may be a signal, or just an ordinary value
+ * @template T
+ * @param {T|(() => T)} value
+ * @returns {T}
+ */
+export const sample = value => {
+  // @ts-ignore
+  return isSignal(value) ? value() : value
+}
+
+/**
+ * A signal is a reactive state container. It holds a single value which is
+ * updated atomically.
+ * 
+ * When signal values are read within reactive scopes, such as `computed` or
+ * `effect`, the scope will automatically re-execute when the signal changes.
+ * 
+ * @template T
+ * @param {T} initial the initial state for the signal
+ * @returns {[() => T, (value: T) => void]}
+ */
+export const signal = initial => {
+  const didChange = transaction()
+
+  let state = initial
+
+  /**
+   * Read current signal state
+   * When read within reactive scopes, such as `computed` or `effect`,
+   * the scope will automatically re-execute when the signal changes.
+   * @returns {T}
+   */
+  const read = () => {
+    didChange.withTransaction(getTracked())
+    return state
+  }
+
+  /**
+   * Send new value to signal
+   * @param {T} value
+   */
+  const send = value => {
+    if (state !== value) {
+      state = value
+      didChange.transact()
+    }
+  }
+
+  return [read, send]
+}
+
+/**
+ * Create a computed signal
+ * Computed sigal takes a zero-argument function, `compute` which may read
+ * from any other signal to produce a value.
+ * `compute` is executed within a reactive scope, so signals referenced within
+ * `compute` will automatically cause `compute` to be re-run when signal
+ * state changes.
+ * @template T
+ * @param {() => T} compute - a function to compute a value. May reference any
+ *   other signals.
+ * @returns {() => T}
+ */
+export const computed = compute => {
+  const didChange = transaction()
+
+  // We batch recomputes to solve the diamond problem.
+  // Every upstream signal read within the computed's tracking scope can
+  // independently generate a change notification. This means if two upstream
+  // signals change at once, our transaction callback gets called twice.
+  // By scheduling batch updates on the next microtask, we ensure that the
+  // computed signal is recomputed only once per event loop turn.
+  const recompute = throttled(() => {
+    const value = withTracking(recompute, compute)
+    if (state !== value) {
+      state = value
+      didChange.transact()
+    }
+  })
+
+  const read = () => {
+    didChange.withTransaction(getTracked())
+    return state
+  }
+
+  let state = withTracking(recompute, compute)
+
+  return read
+}
+
+/**
+ * Perform a side-effect whenever signals referenced within `perform` change.
+ * `perform` is executed within a reactive scope, so signals referenced within
+ * `perform` will automatically cause `perform` to be re-run when signal
+ * state changes.
+ * @param {() => void} perform - the side-effect to perform
+ */
+export const effect = perform => {
+  const performEffect = throttled(() => {
+    withTracking(performEffect, perform)
+  })
+
+  withTracking(performEffect, perform)
+}
+
+/**
+ * @template T
+ * @typedef {Promise<T>|T|null} Effect
+ */
+
+/**
+ * @template State
+ * @template Msg
+ * @typedef {object} Transaction
+ * @property {State} state
+ * @property {Array<Effect<Msg>>} effects
+ */
+
+/**
+ * Create a transaction object for the store.
+ * @template State
+ * @template Msg
+ * @param {State} state
+ * @param {Array<Effect<Msg>>} effects
+ * @returns {Transaction<State, Msg>}
+ */
+export const next = (state, effects=[]) => ({state, effects})
 
 /**
  * Create store for state. A web app can centralize all state in a single store,
  * and use Signals to scope store state down to DOM updates.
  * Store is inspired by the Elm App Architecture Pattern.
- * @returns {[Signal<State>, (msg: Msg) => void]}
+ * @template State
+ * @template Msg
+ * @param {object} options
+ * @param {() => Transaction<State, Msg>} options.init
+ * @param {(state: State, msg: Msg) => Transaction<State, Msg>} options.update
+ * @param {Boolean} options.debug - turn on debug console logging?
+ * @returns {[() => State, (msg: Msg) => void]}
  */
-export const useStore = ({
+export const store = ({
   init,
   update,
   debug=false
 }) => {
   const initial = init()
   if (debug) {
-    console.debug('useStore.state', initial.state)
-    console.debug('useStore.effects', initial.effects.length)
+    console.debug('store.state', initial.state)
+    console.debug('store.effects', initial.effects.length)
   }
 
-  const [$state, sendState] = useSignal(initial.state)
+  const [state, sendState] = signal(initial.state)
 
   const send = msg => {
-    const {state: next, effects} = update($state(), msg)
+    const {state: next, effects} = update(state(), msg)
     if (debug) {
-      console.debug('useStore.msg', msg)
-      console.debug('useStore.state', next)
-      console.debug('useStore.effects', effects.length)
+      console.debug('store.msg', msg)
+      console.debug('store.state', next)
+      console.debug('store.effects', effects.length)
     }
     sendState(next)
     runEffects(effects)
@@ -403,33 +286,57 @@ export const useStore = ({
 
   runEffects(initial.effects)
 
-  return [$state, send]
+  return [state, send]
 }
-
-/**
- * Create a transaction object for the store.
- */
-export const next = (state, effects=[]) => ({state, effects})
 
 /**
  * Log an unknown message and return a no-op transaction. Useful for handling
  * the `default` arm of a switch statement in an update function to catch
  * anything sent to the store that you don't recognize.
+ * @template State
+ * @template Msg
+ * @param {State} state
+ * @param {Msg} msg
+ * @returns {Transaction<State, Msg>}
  */
 export const unknown = (state, msg) => {
   console.warn('Unknown message type', msg)
   return next(state)
 }
 
-const applyTo = (value, fn) => fn(value)
-
 /**
- * Pipe a value through multiple functions, from left to right.
+ * Transform a signal, returning a computed signal that takes values until
+ * the given signal returns null. Once the given signal returns null, the
+ * signal is considered to be complete and no further updates will occur.
+ *
+ * This utility is useful for signals representing a child in a dynamic collection
+ * of children, where the child may cease to exist.
+ * A computed signal looks up the child, returns null if that child no longer
+ * exists. This completes the signal and breaks the connection with upstream
+ * signals, allowing the child signal to be garbaged.
+ * 
+ * @template T
+ * @param {() => T} signalT - a signal
+ * @returns {() => T} - a signal that stops listening and changing after
+ *   `signalT` returns null.
  */
-export const pipe = (value, ...fns) => fns.reduce(applyTo, value)
+export const takeValues = signalT => {
+  let state = signalT()
+  let isComplete = false
 
-/**
- * Compose multiple one-argument functions into a single function.
- * Functions are executed in order of right to left.
- */
-export const compose = (...fns) => value => fns.reduceRight(applyTo, value)
+  return computed(() => {
+    if (isComplete) {
+      return state
+    }
+
+    const next = signalT()
+
+    if (next != null) {
+      state = next
+      return state
+    } else {
+      isComplete = true
+      return state
+    }
+  })
+}

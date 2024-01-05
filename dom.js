@@ -1,4 +1,8 @@
-import {scope, wrapSignal, setCancel, unwrapComplete, noOp} from './tendril.js'
+import {
+  effect,
+  takeValues,
+  sample
+} from './tendril.js'
 
 /**
  * The counter that is incremented for `cid()`
@@ -13,15 +17,23 @@ let _cid = 0
  */
 export const cid = () => `cid${_cid++}`
 
+export const getId = object => object.id
+
+export const index = (iter, getKey=getId) => {
+  const indexed = new Map()
+  for (const item of iter) {
+    indexed.set(getId(item), item)
+  }
+  return indexed
+}
+
 /**
  * Symbol for list item key
  */
 const __key__ = Symbol('list item key')
 
-export const list = (view, $states, send) => parent => {
-  const cancel = $states.listen(states => {
-    let i = 0
-
+export const list = (view, states, send) => parent => {
+  effect(() => {
     // Build an index of children and a list of children to remove.
     // Note that we must build a list of children to remove, since
     // removing in-place would change the live node list and bork iteration.
@@ -29,7 +41,7 @@ export const list = (view, $states, send) => parent => {
     const removes = []
     for (const child of parent.children) {
       children.set(child[__key__], child)
-      if (!states.has(child[__key__])) {
+      if (!states().has(child[__key__])) {
         removes.push(child)
       }
     }
@@ -38,14 +50,15 @@ export const list = (view, $states, send) => parent => {
       parent.removeChild(child)
     }
 
-    for (const key of states.keys()) {
+    let i = 0
+    for (const key of states().keys()) {
       const index = i++
       const child = children.get(key)
       if (child != null) {
         insertElementAt(parent, child, index)
       } else {
         const child = view(
-          scope($states, states => states.get(key)),
+          takeValues(() => states().get(key)),
           send
         )
         child[__key__] = key
@@ -53,7 +66,6 @@ export const list = (view, $states, send) => parent => {
       }
     }
   })
-  setCancel(parent, cancel)
   return parent
 }
 
@@ -81,18 +93,28 @@ export const children = (...children) => parent => {
   }
 }
 
+/**
+ * Write a signal of strings to the text content of a parent element.
+ */
 export const text = text => parent => {
-  const cancel = wrapSignal(text)
-    .listen(text => parent.textContent = unwrapComplete(text))
-  setCancel(parent, cancel)
+  effect(() => {
+    parent.textContent = sample(text) ?? ''
+  })
   return parent
 }
 
+const noOp = () => {}
+
+/**
+ * Signals-aware hyperscript.
+ * Create an element that can be updated with signals.
+ */
 export const h = (tag, properties, configure=noOp) => {
   const element = document.createElement(tag)
 
-  wrapSignal(properties)
-    .listen(value => props(element, unwrapComplete(value)))
+  effect(() => {
+    setProps(element, sample(properties))
+  })
 
   configure(element)
 
@@ -122,9 +144,9 @@ const LAYOUT_TRIGGERING_PROPS = new Set(['innerText'])
  * @param {string} key - the key
  * @param {Value} value - the value to set
  */
-export const prop = (object, key, value) => {
+export const setProp = (object, key, value) => {
   if (LAYOUT_TRIGGERING_PROPS.has(key)) {
-    console.warn(`Checking property value for ${key} triggers layout. Consider writing to this property without using prop().`)
+    console.warn(`Checking property value for ${key} triggers layout. Consider writing to this property without using setProp().`)
   }
 
   if (object[key] !== value) {
@@ -132,8 +154,16 @@ export const prop = (object, key, value) => {
   }
 }
 
-const props = (element, props) => {
-  for (let [key, value] of Object.entries(props)) {
-    prop(element, key, value)
+const setProps = (element, props) => {
+  const attrs = element.getAttributeNames()
+  // Reset properties not present in `props` by looking at attributes and
+  // removing them if there is not a corresponding key in props.
+  for (const key of attrs) {
+    if (props[key] == null) {
+      element.removeAttribute(key)
+    }
+  }
+  for (const [key, value] of Object.entries(props)) {
+    setProp(element, key, value)
   }
 }

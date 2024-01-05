@@ -1,12 +1,7 @@
 import {
-  map,
-  indexed,
-  pipe,
-  useStore,
+  store,
   next,
-  unknown,
-  index,
-  animate
+  unknown
 } from '../../tendril.js'
 
 import {
@@ -15,11 +10,12 @@ import {
   list,
   text,
   cid,
+  index
 } from '../../dom.js'
 
-const action = {}
+const msg = {}
 
-action.updateItems = ({type: 'updateItems'})
+msg.updateItems = ({type: 'updateItems'})
 
 const modelItem = ({
   id=cid(),
@@ -29,14 +25,14 @@ const modelItem = ({
   text
 })
 
-const viewItem = ($item, send) => h(
+const viewItem = (item, send) => h(
   'div',
   {className: 'item'},
   children(
     h(
       'div',
       {className: 'todo-text'},
-      text(map($item, item => item.text))
+      text(() => item().text)
     )
   )
 )
@@ -47,12 +43,12 @@ const modelApp = ({
   items
 })
 
-const viewApp = ($state, send) => h(
+const viewApp = (state, send) => h(
   'div',
   {className: 'app'},
   list(
     viewItem,
-    map($state, state => state.items),
+    () => state().items,
     send
   )
 )
@@ -77,31 +73,28 @@ const update = (state, msg) => {
 }
 
 const updateItems = state => {
-  const items = pipe(
-    state.items.values(),
-    Array.from,
-    items => items.map(item => modelItem({id: item.id, text: Math.random()})),
-    index
+  const items = Array.from(state.items.values()).map(
+    item => modelItem({id: item.id, text: Math.random()})
   )
 
   return next(
     modelApp({
       ...state,
-      items
+      items: index(items)
     })
   )
 }
 
-const [$state, send] = useStore({
+const [state, send] = store({
   init,
   update,
   debug: true
 })
 
-const appEl = viewApp(animate($state), send)
+const appEl = viewApp(state, send)
 document.body.append(appEl)
 
 setInterval(
-  () => send(action.updateItems),
-  0
+  () => send(msg.updateItems),
+  10
 )
