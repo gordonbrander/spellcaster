@@ -1,10 +1,9 @@
 import {
-  scope,
-  wrapCell,
-  setCancel,
-  cancel,
-  __cancel__,
-  noOp
+  useCell,
+  useComputed,
+  useEffect,
+  takeWhileValue,
+  sample
 } from './tendril.js'
 
 /**
@@ -20,13 +19,23 @@ let _cid = 0
  */
 export const cid = () => `cid${_cid++}`
 
+export const getId = object => object.id
+
+export const index = (iter, getKey=getId) => {
+  const indexed = new Map()
+  for (const item of iter) {
+    indexed.set(getId(item), item)
+  }
+  return indexed
+}
+
 /**
  * Symbol for list item key
  */
 const __key__ = Symbol('list item key')
 
-export const list = (view, $states, send) => parent => {
-  const cancelStates = $states.listen(states => {
+export const list = (view, states, send) => parent => {
+  useEffect(() => {
     // Build an index of children and a list of children to remove.
     // Note that we must build a list of children to remove, since
     // removing in-place would change the live node list and bork iteration.
@@ -34,37 +43,31 @@ export const list = (view, $states, send) => parent => {
     const removes = []
     for (const child of parent.children) {
       children.set(child[__key__], child)
-      if (!states.has(child[__key__])) {
+      if (!states().has(child[__key__])) {
         removes.push(child)
       }
     }
 
     for (const child of removes) {
-      cancel(child)
       parent.removeChild(child)
     }
 
     let i = 0
-    for (const key of states.keys()) {
+    for (const key of states().keys()) {
       const index = i++
       const child = children.get(key)
       if (child != null) {
         insertElementAt(parent, child, index)
       } else {
-        const $state = scope(
-          $states,
-          states => states.get(key),
-          states.get(key)
+        const child = view(
+          takeWhileValue(() => states().get(key)),
+          send
         )
-        const child = view($state, send)
-        const cancelState = $state[__cancel__]
-        setCancel(child, cancelState)
         child[__key__] = key
         insertElementAt(parent, child, index)
       }
     }
   })
-  setCancel(parent, cancelStates)
   return parent
 }
 
@@ -93,18 +96,20 @@ export const children = (...children) => parent => {
 }
 
 export const text = text => parent => {
-  const cancel = wrapCell(text)
-    .listen(text => parent.textContent = text)
-  setCancel(parent, cancel)
+  useEffect(() => {
+    parent.textContent = sample(text) ?? ''
+  })
   return parent
 }
+
+const noOp = () => {}
 
 export const h = (tag, properties, configure=noOp) => {
   const element = document.createElement(tag)
 
-  const cancel = wrapCell(properties)
-    .listen(value => props(element, value))
-  setCancel(element, cancel)
+  useEffect(() => {
+    setProps(element, sample(properties))
+  })
 
   configure(element)
 
@@ -134,7 +139,7 @@ const LAYOUT_TRIGGERING_PROPS = new Set(['innerText'])
  * @param {string} key - the key
  * @param {Value} value - the value to set
  */
-export const prop = (object, key, value) => {
+export const setProp = (object, key, value) => {
   if (LAYOUT_TRIGGERING_PROPS.has(key)) {
     console.warn(`Checking property value for ${key} triggers layout. Consider writing to this property without using prop().`)
   }
@@ -144,8 +149,8 @@ export const prop = (object, key, value) => {
   }
 }
 
-const props = (element, props) => {
+const setProps = (element, props) => {
   for (const [key, value] of Object.entries(props)) {
-    prop(element, key, value)
+    setProp(element, key, value)
   }
 }

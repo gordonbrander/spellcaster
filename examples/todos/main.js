@@ -1,8 +1,5 @@
 import {
-  scope,
-  indexIter,
-  animate,
-  pipe,
+  useCell,
   useStore,
   next,
   unknown
@@ -13,7 +10,8 @@ import {
   children,
   list,
   text,
-  cid
+  cid,
+  index
 } from '../../dom.js'
 
 const msg = {}
@@ -36,37 +34,33 @@ const modelTodo = ({
   text
 })
 
-const viewTodo = ($todo, send) => {
-  const $text = scope($todo, todo => todo.text)
-
-  const $buttonProps = scope($todo, todo => ({
-    className: 'button-done',
-    onclick: () => send(msg.complete(todo.id, true))
-  }))
-
-  return h(
-    'div',
-    {className: 'todo'},
-    children(
-      h(
-        'div',
-        {className: 'todo-text'},
-        text($text)
-      ),
-      h(
-        'button',
-        $buttonProps,
-        text('Done')
-      )
+const viewTodo = (todo, send) => h(
+  'div',
+  {className: 'todo'},
+  children(
+    h(
+      'div',
+      {className: 'todo-text'},
+      text(() => todo().text)
+    ),
+    h(
+      'button',
+      {
+        className: 'button-done',
+        onclick: () => send(msg.complete(todo().id, true))
+      },
+      text('Done')
     )
   )
-}
+)
 
 const modelInput = ({text=''}) => ({text})
 
-const viewInput = ($input, send) => {
-  const $props = scope($input, input => ({
-    value: input.text,
+const viewInput = (input, send) => h(
+  'input',
+  () => ({
+    value: input().text,
+    placeholder: 'Enter todo...',
     oninput: event => send(msg.updateInput(event.target.value)),
     onkeyup: event => {
       if (event.key === 'Enter') {
@@ -75,10 +69,8 @@ const viewInput = ($input, send) => {
     },
     type: 'text',
     className: 'todo-input'
-  }))
-
-  return h('input', $props)
-}
+  })
+)
 
 const modelApp = ({
   input=modelInput({}),
@@ -88,24 +80,21 @@ const modelApp = ({
   todos
 })
 
-const viewApp = ($state, send) => {
-  const $input = scope($state, state => state.input)
-
-  const $todos = scope($state, state => state.todos)
-
-  return h(
-    'div',
-    {className: 'app'},
-    children(
-      viewInput($input, send),
-      h(
-        'div',
-        {className: 'todos'},
-        list(viewTodo, $todos, send)
-      )
+const viewApp = (state, send) => h(
+  'div',
+  {className: 'app'},
+  children(
+    viewInput(
+      () => state().input,
+      send
+    ),
+    h(
+      'div',
+      {className: 'todos'},
+      list(viewTodo, () => state().todos, send)
     )
   )
-}
+)
 
 const init = () => next(
   modelApp({})
@@ -132,7 +121,7 @@ const updateInput = (state, text) => next({
 const submitInput = (state, text) => next({
   ...state,
   input: modelInput({text: ''}),
-  todos: indexIter([
+  todos: index([
     ...state.todos.values(),
     modelTodo({text})
   ])
