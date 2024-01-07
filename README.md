@@ -8,12 +8,7 @@ The lightest FRP signals library.
 
 Signals are reactive state containers that update whenever their values change.
 
-Tendril is made up of just three signal primitives: `signal`, `computed`, and `effect`.
-
-`signal` takes an intial value, and returns a getter and a setter (this may feel familiar if you've ever used React hooks).
-
-- The getter is just a zero-argument function that returns the current value.
-- The setter can be called to set a new value on the signal.
+`signal` takes an intial value, and returns a getter and a setter. The getter is just a zero-argument function that returns the current value. The setter can be called to set a new value on the signal. This may feel familiar if you've ever used React hooks.
 
 ```js
 import {signal} from './tendril.js'
@@ -28,7 +23,7 @@ setCount(1)
 console.log(count()) // 1
 ```
 
-You can derive signals from other signals using `computed`. This lets you drill down to just the pieces of state needed by a UI component, updating the DOM in the most efficient way possible. Derived signals will automatically track their dependencies, and recompute whenever their dependencies change:
+You can derive signals from other signals using `computed`. This lets you drill down to the smallest bits of state required by a UI component, updating the DOM in the most efficient way possible.
 
 ```js
 import {signal, computed} from './tendril.js'
@@ -45,25 +40,19 @@ const [post, setPost] = signal({
 const title = computed(() => post().header.title)
 ```
 
-Our new `title` signal will update only when the `title` field in the state changes. We call this fine-grained reactivity. You can drill down to just the properties a component needs, updating components in the most efficient way possible.
+`title` will update only when the title field of the state changes. You can drill down to just the properties a component needs, updating components in the most efficient way possible.
 
-Signals automatically track their dependencies. Any signal referenced within the body of `computed` will be automatically registered as a dependency. Only the dependencies referenced are registered. If you stop referencing a dependency, it is automatically deregistered. For example, if you have an `if` statement and each arm references different signals, only the signals in the active arm will be registerd as dependencies. You never have to worry about registering and removing listeners, or cancelling subscriptions. Tendril manages all of this for you.
+Computed signals automatically track their dependencies, and recompute whenever their dependencies change. If a signal is referenced within the body of `computed`, it is automatically registered as a dependency. Only the dependencies referenced are registered. If you stop referencing a dependency, it is automatically deregistered. For example, if you have an `if` statement and each arm references different signals, only the signals in the active arm will be registerd as dependencies. We call this fine-grained reactivity. You never have to worry about registering and removing listeners, or cancelling subscriptions. Tendril manages all of that for you.
 
 Finally, you can react to signal changes using `effect`.
 
 ```js
-const h1 = document.createElement('h1')
-
-effect(() => h1.textContent = title())
+effect(() => console.log(title()))
 ```
 
-Or, using signals-aware hyperscript:
+Just like `computed`, `effect` will update whenever one or more of the signals it references updates.
 
-```js
-h('h1', {}, text(title))
-```
-
-Together, `signal`, `computed`, and `effect` make it ergonomic to build efficient reactive UIs.
+Using `signal`, `computed`, and `effect` it becomes possible to build reactive components.
 
 ## Installation
 
