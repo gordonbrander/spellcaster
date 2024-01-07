@@ -12,7 +12,7 @@ import {
   text,
   cid,
   index
-} from '../../dom.js'
+} from '../../hyperscript.js'
 
 const msg = {}
 

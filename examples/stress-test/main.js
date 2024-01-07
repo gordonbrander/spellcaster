@@ -1,100 +1,33 @@
 import {
-  store,
-  next,
-  unknown
+  signal,
+  computed,
+  effect
 } from '../../tendril.js'
 
-import {
-  h,
-  children,
-  list,
-  text,
-  cid,
-  index
-} from '../../dom.js'
+const [a, setA] = signal(0)
+const [b, setB] = signal(0)
+const [c, setC] = signal(0)
 
-const msg = {}
+let computeds = []
+for (var i = 0; i < 10000; i++) {
+  const x = computed(() => a() + b() + c())
+  computeds.push(x)
+}
 
-msg.updateItems = ({type: 'updateItems'})
-
-const modelItem = ({
-  id=cid(),
-  text=''
-}) => ({
-  id,
-  text
-})
-
-const viewItem = (item, send) => h(
-  'div',
-  {className: 'item'},
-  children(
-    h(
-      'div',
-      {className: 'todo-text'},
-      text(() => item().text)
-    )
-  )
-)
-
-const modelApp = ({
-  items=new Map()
-}) => ({
-  items
-})
-
-const viewApp = (state, send) => h(
-  'div',
-  {className: 'app'},
-  list(
-    viewItem,
-    () => state().items,
-    send
-  )
-)
-
-const init = () => {
-  const itemList = []
-  for (var i = 0; i < 1000; i++) {
-    const item = modelItem({text: Math.random()})
-    itemList.push(item)
+let combined = computed(() => {
+  let x = 0
+  for (let c of computeds) {
+    x = x + c()
   }
-  const items = index(itemList)
-  return next(modelApp({items}))
-}
-
-const update = (state, msg) => {
-  switch (msg.type) {
-  case 'updateItems':
-    return updateItems(state)
-  default:
-    return unknown(state, msg)
-  }
-}
-
-const updateItems = state => {
-  const items = Array.from(state.items.values()).map(
-    item => modelItem({id: item.id, text: Math.random()})
-  )
-
-  return next(
-    modelApp({
-      ...state,
-      items: index(items)
-    })
-  )
-}
-
-const [state, send] = store({
-  init,
-  update,
-  debug: true
+  return x
 })
 
-const appEl = viewApp(state, send)
-document.body.append(appEl)
+effect(() => {
+  console.time()
+  combined()
+  console.timeEnd()
+})
 
-setInterval(
-  () => send(msg.updateItems),
-  10
-)
+setA(Date.now())
+setB(Date.now())
+setC(Date.now())

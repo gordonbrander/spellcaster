@@ -5,7 +5,7 @@
  * We use this to allow signals to automatically gather their downstream
  * dependencies.
  */
-const dependencyTracker = () => {
+export const dependencyTracker = () => {
   /** @type {Array<() => void>} */
   const scopes = []
 
