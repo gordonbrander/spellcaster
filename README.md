@@ -6,9 +6,9 @@ The lightest FRP signals library.
 
 ## Introduction
 
-Signals are reactive state containers that update whenever their values change. You can create signals from other signals, drilling down to just the pieces of state needed by a UI component, updating the DOM in the most efficient way possible.
+Signals are reactive state containers that update whenever their values change.
 
-Tendril is made up of just three reactive primitives: `signal`, `computed`, and `effect`.
+Tendril is made up of just three signal primitives: `signal`, `computed`, and `effect`.
 
 `signal` takes an intial value, and returns a getter and a setter (this may feel familiar if you've ever used React hooks).
 
@@ -28,7 +28,7 @@ setCount(1)
 console.log(count()) // 1
 ```
 
-Signals automatically track their dependencies, and will recompute whenever their dependencies change. For example, let's create a signal from another signal using `computed`:
+You can derive signals from other signals using `computed`. This lets you drill down to just the pieces of state needed by a UI component, updating the DOM in the most efficient way possible. Derived signals will automatically track their dependencies, and recompute whenever their dependencies change:
 
 ```js
 import {signal, computed} from './tendril.js'
@@ -49,7 +49,7 @@ Our new `title` signal will update only when the `title` field in the state chan
 
 Signals automatically track their dependencies. Any signal referenced within the body of `computed` will be automatically registered as a dependency. Only the dependencies referenced are registered. If you stop referencing a dependency, it is automatically deregistered. For example, if you have an `if` statement and each arm references different signals, only the signals in the active arm will be registerd as dependencies. You never have to worry about registering and removing listeners, or cancelling subscriptions. Tendril manages all of this for you.
 
-Lastly, you can react to signal changes using `effect`.
+Finally, you can react to signal changes using `effect`.
 
 ```js
 const h1 = document.createElement('h1')
@@ -62,6 +62,8 @@ Or, using signals-aware hyperscript:
 ```js
 h('h1', {}, text(title))
 ```
+
+Together, `signal`, `computed`, and `effect` make it ergonomic to build efficient reactive UIs.
 
 ## Installation
 
