@@ -103,7 +103,61 @@ document.body.append(view)
 
 ## Deriving state with `computed`
 
-## Using `store` for global app state
+## Using `store` to manage global app state
+
+`store` offers an Elm/Redux-like store for managing application state.
+
+- All application state can be centralized in a single store.
+- State is only be updated via a reducer function, making state changes predictable and reproducible.
+- Store manages asynchronous side-effects with an effects runner.
+
+`store` can be initialized and used much like `signal`. However, instead of being initialized with a value, it is initialized with two functions: `init()` and `update(state, msg)`. Both functions return a transaction object (created with `next`) that contains the next state. Store returns a signal for the state, as well as a send function that allows you to send messages to the store.
+
+```js
+const init = () => next({
+  count: 0
+})
+
+const update = (state, msg) => {
+  switch (msg.type) {
+  case 'increment':
+    return next({...state, count: state.count + 1})
+  default:
+    return next(state)
+  }
+}
+
+const [state, send] = store({init, update})
+
+console.log(state()) // {count: 0}
+send({type: 'increment'})
+console.log(state()) // {count: 1}
+```
+
+Transactions can also include asynchronous side-effects, such as HTTP requests and timers. Effects are modeled as promises that resolve to a `msg`.
+
+```js
+// Fetches count from API and returns it as a message
+const fetchCount = async () => {
+  const resp = await fetch('https://api.example.com/count').json()
+  const count = resp.count
+  return {type: 'setCount', count}
+}
+
+const update = (state, msg) => {
+  switch (msg.type) {
+  case 'fetchCount':
+    // Include list of of effects with transaction
+    return next(state, [fetchCount()])
+  case 'setCount':
+    return next({...state, count: msg.count})
+  default:
+    return next(state)
+  }
+}
+```
+
+Store will await each of the promises in the array of effects, and then feed their resulting messages back into the store. This allows you to model side-effects along with state changes in your reducer function, making side-effects deterministic and predictable.
 
 ## Hyperscript
 
