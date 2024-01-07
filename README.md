@@ -6,7 +6,7 @@ The lightest FRP signals library.
 
 ## Introduction
 
-Signals are reactive containers for state that react whenever their values change. You can create signals from other signals, drilling down to just the pieces of state needed by a particular UI component, updating the DOM in the most efficient way possible.
+Signals are reactive containers for state that update whenever their values change. You can create signals from other signals, drilling down to just the pieces of state needed by a UI component, updating the DOM in the most efficient way possible.
 
 Tendril is made up of just three reactive primitives: `signal`, `computed`, and `effect`.
 
