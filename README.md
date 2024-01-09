@@ -8,7 +8,7 @@ The lightest FRP signals library.
 
 Signals are reactive state containers that update whenever their values change.
 
-`signal` takes an intial value, and returns a getter and a setter. The getter is just a zero-argument function that returns the current value. The setter can be called to set a new value on the signal. This may feel familiar if you've ever used React hooks.
+`signal` takes an intial value, and returns a getter and a setter. The getter is a zero-argument function that returns the current value, and the setter can be called to set a new value for the signal. This will feel familiar if you've ever used React hooks.
 
 ```js
 import {signal} from './tendril.js'
@@ -23,36 +23,35 @@ setCount(1)
 console.log(count()) // 1
 ```
 
-You can derive signals from other signals using `computed`. This lets you drill down to the smallest bits of state required by a UI component, updating the DOM in the most efficient way possible.
+So far, so good. But signals have a hidden superpower: they're reactive! When we reference a signal within a rective scope, the scope will update whenever the signal updates. For example, let's create a derived signal from another signal, using `computed()`.
 
 ```js
 import {signal, computed} from './tendril.js'
 
-const [post, setPost] = signal({
-  header: {
-    title: 'Text',
-    subtitle: 'x'
-  },
-  body: '...'
+const [todos, setTodos] = signal([
+  { text: 'Chop wood', isComplete: true },
+  { text: 'Carry water', isComplete: false }
+])
+
+// Create a computed signal from other signals
+const completed = computed(() => {
+  // Re-runs automatically when todos signal changes
+  return todos().filter(todo => todo.isComplete).length
 })
 
-// Reacts only when title changes
-const title = computed(() => post().header.title)
+console.log(completed()) // 1
 ```
 
-`title` will update only when the title field of the state changes. You can drill down to just the properties a component needs, updating components in the most efficient way possible.
+`computed` runs the function you provide within a reactive scope, so when the signal changes, the function is re-run.
 
-Computed signals automatically track their dependencies, and recompute whenever their dependencies change. If a signal is referenced within the body of `computed`, it is automatically registered as a dependency. Only the dependencies referenced are registered. If you stop referencing a dependency, it is automatically deregistered. For example, if you have an `if` statement and each arm references different signals, only the signals in the active arm will be registerd as dependencies. We call this fine-grained reactivity. You never have to worry about registering and removing listeners, or cancelling subscriptions. Tendril manages all of that for you.
-
-Finally, you can react to signal changes using `effect`.
+What about when you want to react to value changes? That's where `effect` comes in. It lets you perform a side-effect whenever a signal changes:
 
 ```js
+// Log every time title changes
 effect(() => console.log(title()))
 ```
 
-Just like `computed`, `effect` will update whenever one or more of the signals it references updates.
-
-Using `signal`, `computed`, and `effect` it becomes possible to build reactive components.
+Effect is where signals meet the real world. You can use `effect` like you might use `useEffect` in React... to kick off HTTP requests, perform DOM mutations, or anything else that should react to state updates.
 
 ## Installation
 
@@ -66,9 +65,9 @@ import * as tendril from './tendril.js'
 <script type="module" src="tendril.js">
 ```
 
-## Usage example
+## Creating reactive components with signals
 
-Here's a simple counter example using signals and signals-aware hyperscript.
+Here's a simple counter example using signals and hyperscript.
 
 ```js
 import {signal} from './tendril.js'
@@ -99,9 +98,87 @@ const view = viewCounter()
 document.body.append(view)
 ```
 
-## Using signals for local component state
+What's going on here? To make sense of this, let's start this minimal component using only signals and vanilla JS.
 
-## Deriving state with `computed`
+```js
+const [title, setTitle] = signal('Untitled')
+
+const viewTitle = title => {
+  const element = document.createElement('h1')
+  element.className = 'title'
+
+  effect(() => element.textContent = title())
+
+  return element
+}
+
+const view = viewTitle(title)
+document.body.append(view)
+
+setTitle('Hello, world')
+```
+
+Instead of returning a virtual DOM which has to be diffed against the actual DOM, we can simply return an ordinary DOM element. Since signals are *reactive* representations of values, we can pass them into an ordinary function that simply constructs and return an element. When the signal updates, the changes are reflected to the element.
+
+Writing `document.createElement()` is dull, though, so Tendril offers a short-cut: signals-aware hyperscript. Let's rewrite the above component using hyperscript:
+
+```js
+const viewTitle = title => h('h1', {className: 'title'}, text(title))
+```
+
+Easy! Here's a more complex example, with some dynamic properties.
+
+```js
+const viewModal = (isHidden, content) => h(
+  'div',
+  () => ({
+    className: 'modal',
+    hidden: isHidden()
+  }),
+  children(content)
+)
+```
+
+Note that instead of passing an object for the element props, we passed a function. This function is evaluated within a reactive scope, so signals accessed within it will cause the function to be automatically re-evaluated when changes occur.
+
+## Deriving signals with `computed`
+
+`computed()` lets you to derive a signal from one or more other signals.
+
+```js
+import {signal, computed} from './tendril.js'
+
+const [todos, setTodos] = signal([
+  { text: 'Chop wood', isComplete: true },
+  { text: 'Carry water', isComplete: false }
+])
+
+// Create a computed signal from other signals
+const completed = computed(() => {
+  // Re-runs automatically when todos signal changes
+  return todos().filter(todo => todo.isComplete).length
+})
+
+console.log(completed()) // 1
+```
+
+Computed signals automatically track their dependencies, and recompute whenever their dependencies change. Only the signals that are executed are registered as dependencies. For example, if you have an `if` statement and each arm references different signals, only the signals in the active arm will be registered as dependencies. If a signal stops being executed (for example, if it is in the inactive arm of an if statement), it will be automatically de-registered.
+
+```js
+const fizzBuzz = computed(() => {
+  if (isActive()) {
+    // Registered as a dependency only when isActive is true
+    return fizz()
+  } else {
+    // Registered as a dependency only when isActive is false
+    return buzz()
+  }
+})
+```
+
+You never have to worry about registering and removing listeners, or cancelling subscriptions. Tendril manages all of that for you. We call this fine-grained reactivity.
+
+Simple apps that use local component state may not need `computed`, but it comes in handy for complex apps that want to centralize state in one place.
 
 ## Using `store` to manage global app state
 
@@ -161,6 +238,26 @@ Store will await each of the promises in the array of effects, and then feed the
 
 ## Hyperscript
 
+Hyperscript is a functional shorthand for creating reactive elements.
+
+```js
+const viewTitle = title => h('h1', {className: 'title'}, text(title))
+```
+
+Easy! Here's a more complex example, with dynamic properties.
+```js
+const viewModal = (isHidden, content) => h(
+  'div',
+  () => ({
+    className: 'modal',
+    hidden: isHidden()
+  }),
+  children(content)
+)
+```
+
+Instead of passing an object for props, we can pass a function. The props function is evaluated within a reactive scope, so if it accesses any signals, it is automatically recomputed whenever they change.
+
 ## API
 
 ### `signal(value)`
@@ -180,3 +277,7 @@ Store offers an Elm/Redux-like reactive store powered by signals. Signal state i
 #### `unknown(state, msg)`
 
 #### `takeValues(signal)`
+
+Takes a signal that may include null or undefined values. Returns a signal that will take values until it encounters the first nullish value, at which point, the signal will stop updating.
+
+`takeValues()` is useful for creating signals to pass down to dynamic components that may not exist forever.
