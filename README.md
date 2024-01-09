@@ -130,7 +130,7 @@ const viewCounter = () => {
 }
 ```
 
-We can see that hyperscript is just an ergonomic way to construct an element. We're just constructing return an ordinary DOM element here! Since signals are reactive representations of values, the returned element is reactive. When the signal value changes, the element automatically updates. No virtual DOM diffing is needed.
+We can see that hyperscript is just an ergonomic way to build elements. We're just constructing and returniing ordinary DOM elements here! Since signals are reactive representations of values, the returned element is reactive. When the signal value changes, the element automatically updates, making precision changes to the DOM. No virtual DOM diffing is needed!
 
 The above example uses `signal` for local component state, but you can also pass a signal down from a parent.
 
