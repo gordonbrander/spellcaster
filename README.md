@@ -304,27 +304,3 @@ const viewTodos = todos => h(
 ```
 
 With hyperscript, most of the DOM tree is static. Only dynamic properties, text, and lists are dynamic. This design approach is inspired by [SwiftUI](https://developer.apple.com/documentation/swiftui/list), and it makes updates extremely efficient.
-
-## API
-
-### `signal(value)`
-
-### `computed(fn)`
-
-### `effect(fn)`
-
-### `store(options)`
-
-Store offers an Elm/Redux-like reactive store powered by signals. Signal state is updated via a reducer function, which returns new states, and any side-effects.
-
-### Utilities
-
-#### `next(state, effects)`
-
-#### `unknown(state, msg)`
-
-#### `takeValues(signal)`
-
-Takes a signal that may include null or undefined values. Returns a signal that will take values until it encounters the first nullish value, at which point, the signal will stop updating.
-
-`takeValues()` is useful for creating signals to pass down to dynamic components that may not exist forever.
