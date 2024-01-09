@@ -238,25 +238,33 @@ Store will await each of the promises in the array of effects, and then feed the
 
 ## Hyperscript
 
-Hyperscript is a functional shorthand for creating reactive elements.
+Tendril hyperscript is a functional shorthand for creating reactive HTML elements.
+
+```js
+h(tag, props, config)
+```
+
+- Parameters
+  - `tag` - a string for the tag to be created
+  - `props` - is an object, or a signal for an object that contains props to be set on the element
+  - `config(element)` - a callback that receives the constructed element and may mutate it.
+- Returns: `HTMLElement` - the constructed element
+
+`h()` can be used with config helpers like `text()` and `children()` to efficiently build HTML elements.
 
 ```js
 const viewTitle = title => h('h1', {className: 'title'}, text(title))
-```
 
-Easy! Here's a more complex example, with dynamic properties.
-```js
-const viewModal = (isHidden, content) => h(
+const viewModal = (isHidden, ...content) => h(
   'div',
   () => ({
     className: 'modal',
     hidden: isHidden()
   }),
-  children(content)
+  // Assign children to element
+  children(...content)
 )
 ```
-
-Instead of passing an object for props, we can pass a function. The props function is evaluated within a reactive scope, so if it accesses any signals, it is automatically recomputed whenever they change.
 
 ## API
 
