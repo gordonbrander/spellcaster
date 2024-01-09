@@ -120,7 +120,7 @@ document.body.append(view)
 setTitle('Hello, world')
 ```
 
-Instead of returning a virtual DOM which has to be diffed against the actual DOM, we can simply return an ordinary DOM element. Since signals are *reactive* representations of values, we can pass them into an ordinary function that simply constructs and return an element. When the signal updates, the changes are reflected to the element.
+Since signals are *reactive* representations of values, we can pass them down to an ordinary function and perform updates whenever the signal changes. We simply return an ordinary DOM element. It knows how to update itself using signals, so no virtual DOM diffing is needed! When the signal updates, the changes are automatically reflected to the element.
 
 Writing `document.createElement()` is dull, though, so Tendril offers a short-cut: signals-aware hyperscript. Let's rewrite the above component using hyperscript:
 
@@ -128,7 +128,9 @@ Writing `document.createElement()` is dull, though, so Tendril offers a short-cu
 const viewTitle = title => h('h1', {className: 'title'}, text(title))
 ```
 
-Easy! Here's a more complex example, with some dynamic properties.
+Simple!
+
+Here's a more complex example, with some dynamic properties. Instead of passing an object, we'll pass a function that returns an object. This function is evaluated within a reactive scope, so signals accessed within it will cause the function to be automatically re-evaluated when changes occur.
 
 ```js
 const viewModal = (isHidden, content) => h(
@@ -141,7 +143,7 @@ const viewModal = (isHidden, content) => h(
 )
 ```
 
-Note that instead of passing an object for the element props, we passed a function. This function is evaluated within a reactive scope, so signals accessed within it will cause the function to be automatically re-evaluated when changes occur.
+Ergonomic, efficient, reactive UI without a compile step.
 
 ## Deriving signals with `computed`
 
