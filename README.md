@@ -138,7 +138,7 @@ The above example uses `signal` for local component state, but you can also pass
 const viewTitle = title => h('h1', {className: 'title'}, text(title))
 ```
 
-Here's a more complex example, with some dynamic properties. Instead of passing `h()` a props object, we'll pass it a function that returns an object. This function is evaluated within a reactive scope, so whenever `isHidden()` changes, the props are be updated.
+Here's a more complex example, with some dynamic properties. Instead of passing `h()` a props object, we'll pass it a function that returns an object. This function is evaluated within a reactive scope, so whenever `isHidden()` changes, the props are updated.
 
 ```js
 const viewModal = (isHidden, ...childViews) => h(
