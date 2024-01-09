@@ -23,7 +23,9 @@ setCount(1)
 console.log(count()) // 1
 ```
 
-So far, so good. But signals have a hidden superpower: they're reactive! When we reference a signal within a rective scope, the scope will update whenever the signal updates. For example, let's create a derived signal from another signal, using `computed()`.
+So far, so good. But signals have a hidden superpower: they're reactive!
+
+When we reference a signal within a rective scope, that scope will re-run whenever the signal value updates. For example, let's create a derived signal from another signal, using `computed()`.
 
 ```js
 import {signal, computed} from './tendril.js'
