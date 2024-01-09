@@ -100,7 +100,7 @@ const view = viewCounter()
 document.body.append(view)
 ```
 
-What's going on here? To make sense of this, let's start this minimal component using only signals and vanilla JS.
+What's going on here? To make sense of this, let's build a minimal component using only signals and vanilla JS.
 
 ```js
 const [title, setTitle] = signal('Untitled')
