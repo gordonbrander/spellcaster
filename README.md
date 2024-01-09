@@ -1,8 +1,10 @@
+# Tendril
+
 The lightest FRP signals library.
 
-- Less than 4kb of vanilla JavaScript enabling efficient reactive UI.
+- Less than 4kb
 - Fine-grained reactivity and automatic dependency tracking.
-- Vanilla JavaScript: No compile step. Types provided by JSDoc. Just import and go.
+- Vanilla JavaScript. No compile step. Types provided by JSDoc.
 
 ## Introduction
 
@@ -100,50 +102,58 @@ const view = viewCounter()
 document.body.append(view)
 ```
 
-What's going on here? To make sense of this, let's build a minimal component using only signals and vanilla JS.
+What's going on here? To make sense of this, let's rewrite this component using only signals and vanilla DOM methods.
 
 ```js
-const [title, setTitle] = signal('Untitled')
+const viewCounter = () => {
+  const [count, setCount] = signal(0)
 
-const viewTitle = title => {
-  const element = document.createElement('h1')
-  element.className = 'title'
+  const wrapper = document.createElement('div')
+  wrapper.className = 'wrapper'
 
-  effect(() => element.textContent = title())
+  // Create count element
+  const count = document.createElement('div')
+  count.className = 'count'
+  wrapper.append(count)
 
-  return element
+  // Create button
+  const button = document.createElement('button')
+  button.textContent = 'Increment'
+  // Set count when button is clicked
+  button.onclick = () => setCount(count() + 1)
+  wrapper.append(button)
+
+  // Write text whenever signal changes
+  effect(() => count.textContent = text())
+
+  return wrapper
 }
-
-const view = viewTitle(title)
-document.body.append(view)
-
-setTitle('Hello, world')
 ```
 
-Since signals are *reactive* representations of values, we can pass them down to an ordinary function and perform updates whenever the signal changes. We simply return an ordinary DOM element. It knows how to update itself using signals, so no virtual DOM diffing is needed! When the signal updates, the changes are automatically reflected to the element.
+We can see that hyperscript is just an ergonomic way to construct an element. We're just constructing return an ordinary DOM element here! Since signals are reactive representations of values, the returned element is reactive. When the signal value changes, the element automatically updates. No virtual DOM diffing is needed.
 
-Writing `document.createElement()` is dull, though, so Tendril offers a short-cut: signals-aware hyperscript. Let's rewrite the above component using hyperscript:
+The above example uses `signal` for local component state, but you can also pass a signal down from a parent.
 
 ```js
 const viewTitle = title => h('h1', {className: 'title'}, text(title))
 ```
 
-Simple!
-
-Here's a more complex example, with some dynamic properties. Instead of passing an object, we'll pass a function that returns an object. This function is evaluated within a reactive scope, so signals accessed within it will cause the function to be automatically re-evaluated when changes occur.
+Here's a more complex example, with some dynamic properties. Instead of passing `h()` a props object, we'll pass it a function that returns an object. This function is evaluated within a reactive scope, so whenever `isHidden()` changes, the props are be updated.
 
 ```js
-const viewModal = (isHidden, content) => h(
+const viewModal = (isHidden, ...childViews) => h(
   'div',
   () => ({
     className: 'modal',
     hidden: isHidden()
   }),
-  children(content)
+  children(...childViews)
 )
 ```
 
-Ergonomic, efficient, reactive UI without a compile step.
+Passing down signals allows you to share reactive state between components. You can even centralize all of your application state into one signal, and pass down scoped signals to sub-components using `computed`.
+
+Signals give you rrgonomic, efficient, reactive components, without a virtual DOM or compile step.
 
 ## Deriving signals with `computed`
 
@@ -250,14 +260,19 @@ h(tag, props, config)
 
 - Parameters
   - `tag` - a string for the tag to be created
-  - `props` - is an object, or a signal for an object that contains props to be set on the element
-  - `config(element)` - a callback that receives the constructed element and may mutate it.
+  - `props:` - an object, or a signal for an object that contains props to be set on the element
+  - `config(element)?` - an optional callback that receives the constructed element and can modify it
 - Returns: `HTMLElement` - the constructed element
 
 `h()` can be used with config helpers like `text()` and `children()` to efficiently build HTML elements.
 
 ```js
-const viewTitle = title => h('h1', {className: 'title'}, text(title))
+const viewTitle = title => h(
+  'h1',
+  {className: 'title'},
+  // Set text content of element
+  text(title)
+)
 
 const viewModal = (isHidden, ...content) => h(
   'div',
@@ -265,10 +280,30 @@ const viewModal = (isHidden, ...content) => h(
     className: 'modal',
     hidden: isHidden()
   }),
-  // Assign children to element
+  // Assign a static list of children to element
   children(...content)
 )
+
+const viewCustom = () => h(
+  'div',
+  {},
+  element => {
+    // Custom logic
+  }
+)
 ```
+
+What about rendering dynamic lists of children? For this, we can use `list()`. It takes a `() => Map<Key, Item>` and will efficiently re-render children, updating, moving, or removing elements as needed, making the minimal number of DOM modifications.
+
+```js
+const viewTodos = todos => h(
+  'div',
+  {className: 'todos'},
+  list(todos, viewTodo)
+)
+```
+
+With hyperscript, most of the DOM tree is static. Only dynamic properties, text, and lists are dynamic. This design approach is inspired by [SwiftUI](https://developer.apple.com/documentation/swiftui/list), and it makes updates extremely efficient.
 
 ## API
 
