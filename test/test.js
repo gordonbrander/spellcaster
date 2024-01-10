@@ -221,7 +221,7 @@ describe('computed', () => {
     assert(sum() === 2)
   })
 
-  it('reacts to signal changes by recomputing on next microtask', async () => {
+  it('recomputes when signal dependencies change, once per microtask, batching multiple updates', async () => {
     const [a, setA] = signal(1)
     const [b, setB] = signal(1)
     const sum = computed(() => a() + b())
