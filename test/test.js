@@ -260,6 +260,16 @@ describe('store', () => {
     assert(isSignal(state))
   })
 
+  it('returns a send function as the second item of the array pair', () => {
+    const init = () => next({})
+    const update = (state, msg) => next({})
+
+    const [state, send] = store({init, update})
+
+    assertEqual(typeof send, 'function')
+    assertEqual(send.length, 1)
+  })
+
   it('updates the state immediately', () => {
     const Msg = {}
     Msg.inc = {type: 'inc'}
