@@ -16,7 +16,7 @@ import {
 } from "../tendril.js"
 
 describe('withTracking', () => {
-  it('it executes the body function immediately and returns the value', () => {
+  it('executes the body function immediately and returns the value', () => {
     const onChange = () => {}
 
     const didExecute = withTracking(
@@ -41,7 +41,7 @@ describe('withTracking', () => {
 })
 
 describe('getTracked', () => {
-  it('is undefined outside of tracking scopes', () => {
+  it('returns undefined outside of tracking scopes', () => {
     const dependency = getTracked()
 
     assert(dependency == null)
