@@ -1,4 +1,4 @@
-# Spellcaster
+# 👋🔮 Spellcaster
 
 ![Node.js CI status](https://github.com/gordonbrander/spellcaster/actions/workflows/node.js.yml/badge.svg?branch=main)
 
