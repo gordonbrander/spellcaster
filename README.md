@@ -2,7 +2,7 @@
 
 ![Node.js CI status](https://github.com/gordonbrander/spellcaster/actions/workflows/node.js.yml/badge.svg?branch=main)
 
-Reactive UI without the dark magic.
+Reactive UI without dark magic.
 
 - Fine-grained reactive signals with automatic dependency tracking
 - Vanilla JavaScript with types provided by JSDoc
