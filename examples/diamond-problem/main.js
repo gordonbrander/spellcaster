@@ -2,7 +2,7 @@ import {
   signal,
   computed,
   effect
-} from '../../tendril.js'
+} from '../../spellcaster.js'
 
 const [clock, sendClock] = signal(Date.now())
 

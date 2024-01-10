@@ -1,4 +1,4 @@
-import { signal } from '../../tendril.js'
+import { signal } from '../../spellcaster.js'
 
 import {
   h,

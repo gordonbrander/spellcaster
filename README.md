@@ -1,12 +1,12 @@
-# Tendril
+# Spellcaster
 
-![Node.js CI status](https://github.com/gordonbrander/tendril/actions/workflows/node.js.yml/badge.svg?branch=main)
+![Node.js CI status](https://github.com/gordonbrander/spellcaster/actions/workflows/node.js.yml/badge.svg?branch=main)
 
-The lightest FRP signals library.
+Reactive UI without the dark magic.
 
 - Fine-grained reactive signals with automatic dependency tracking
 - Vanilla JavaScript with types provided by JSDoc
-- Zero dependencies, no compile step
+- Zero dependencies, no build step
 - Less than 4kb compressed
 
 ## Introduction
@@ -16,7 +16,7 @@ Signals are reactive state containers that update whenever their values change.
 `signal` takes an intial value, and returns a getter and a setter. The getter is a zero-argument function that returns the current value, and the setter can be called to set a new value for the signal. This will feel familiar if you've ever used React hooks.
 
 ```js
-import {signal} from './tendril.js'
+import {signal} from './spellcaster.js'
 
 const [count, setCount] = signal(0)
 
@@ -33,7 +33,7 @@ So far, so good. But signals have a hidden superpower: they're reactive!
 When we reference a signal within a rective scope, that scope will re-run whenever the signal value updates. For example, let's create a derived signal from another signal, using `computed()`.
 
 ```js
-import {signal, computed} from './tendril.js'
+import {signal, computed} from './spellcaster.js'
 
 const [todos, setTodos] = signal([
   { text: 'Chop wood', isComplete: true },
@@ -62,10 +62,10 @@ Effect is where signals meet the real world. You can use `effect` like you might
 
 ## Installation
 
-Tendril is a vanilla JavaScript module. You can import it directly. No compile step needed.
+Spellcaster is a vanilla JavaScript module. You can import it directly. No build step needed.
 
 ```js
-import * as tendril from './tendril.js'
+import * as spellcaster from './spellcaster.js'
 ```
 
 ## Creating reactive components with signals
@@ -73,7 +73,7 @@ import * as tendril from './tendril.js'
 Here's a simple counter example using signals and hyperscript.
 
 ```js
-import {signal} from './tendril.js'
+import {signal} from './spellcaster.js'
 import {h, text, children} from './hyperscript.js'
 
 const viewCounter = () => {
@@ -159,7 +159,7 @@ Signals give you rrgonomic, efficient, reactive components, without a virtual DO
 `computed()` lets you to derive a signal from one or more other signals.
 
 ```js
-import {signal, computed} from './tendril.js'
+import {signal, computed} from './spellcaster.js'
 
 const [todos, setTodos] = signal([
   { text: 'Chop wood', isComplete: true },
@@ -189,7 +189,7 @@ const fizzBuzz = computed(() => {
 })
 ```
 
-You never have to worry about registering and removing listeners, or cancelling subscriptions. Tendril manages all of that for you. We call this fine-grained reactivity.
+You never have to worry about registering and removing listeners, or cancelling subscriptions. Spellcaster manages all of that for you. We call this fine-grained reactivity.
 
 Simple apps that use local component state may not need `computed`, but it comes in handy for complex apps that want to centralize state in one place.
 
@@ -251,7 +251,7 @@ Store will perform each effect concurrently, and feed their resulting messages b
 
 ## Hyperscript
 
-Tendril hyperscript is a functional shorthand for creating reactive HTML elements.
+Spellcaster hyperscript is a functional shorthand for creating reactive HTML elements.
 
 ```js
 h(tag, props, config)
