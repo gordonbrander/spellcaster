@@ -8,7 +8,7 @@ import {
 import {
   h,
   children,
-  list,
+  repeat,
   text,
   cid,
   index
@@ -91,7 +91,7 @@ const viewApp = (state, send) => h(
     h(
       'div',
       {className: 'todos'},
-      list(viewTodo, computed(() => state().todos), send)
+      repeat(viewTodo, computed(() => state().todos), send)
     )
   )
 )

@@ -292,14 +292,14 @@ const viewCustom = () => h(
 )
 ```
 
-What about rendering dynamic lists of children? For this, we can use `list()`. It takes a `() => Map<Key, Item>` and will efficiently re-render children, updating, moving, or removing elements as needed, making the minimal number of DOM modifications.
+What about rendering dynamic lists of children? For this, we can use `repeat()`. It takes a `() => Map<Key, Item>` and will efficiently re-render children, updating, moving, or removing elements as needed, making the minimal number of DOM modifications.
 
 ```js
 const viewTodos = todos => h(
   'div',
   {className: 'todos'},
-  list(todos, viewTodo)
+  repeat(todos, viewTodo)
 )
 ```
 
-With hyperscript, most of the DOM tree is static. Only dynamic properties, text, and lists are dynamic. This design approach is inspired by [SwiftUI](https://developer.apple.com/documentation/swiftui/list), and it makes updates extremely efficient.
+With hyperscript, most of the DOM tree is static. Only dynamic properties, text, and `repeat()` are dynamic. This design approach is inspired by [SwiftUI](https://developer.apple.com/documentation/swiftui/list), and it makes DOM updates extremely efficient.

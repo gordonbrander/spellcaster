@@ -50,7 +50,7 @@ const __key__ = Symbol('list item key')
  * @param {(msg: Msg) => void} send 
  * @returns {(parent: HTMLElement) => void}
  */
-export const list = (view, states, send) => parent => {
+export const repeat = (view, states, send) => parent => {
   effect(() => {
     // Build an index of children and a list of children to remove.
     // Note that we must build a list of children to remove, since
