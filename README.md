@@ -4,9 +4,10 @@
 
 The lightest FRP signals library.
 
-- Less than 4kb
-- Fine-grained reactivity and automatic dependency tracking.
-- Vanilla JavaScript. No compile step. Types provided by JSDoc.
+- Fine-grained reactive signals with automatic dependency tracking
+- Vanilla JavaScript with types provided by JSDoc
+- Zero dependencies, no compile step
+- Less than 4kb compressed
 
 ## Introduction
 
@@ -61,14 +62,10 @@ Effect is where signals meet the real world. You can use `effect` like you might
 
 ## Installation
 
-Tendril is a vanilla JavaScript module. You can import it directly. No compile step needed!
+Tendril is a vanilla JavaScript module. You can import it directly. No compile step needed.
 
 ```js
 import * as tendril from './tendril.js'
-```
-
-```html
-<script type="module" src="tendril.js">
 ```
 
 ## Creating reactive components with signals
