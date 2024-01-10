@@ -64,7 +64,7 @@ export const throttled = job => {
  * Allows you to register listeners that are called once during the next
  * transaction.
  */
-const transaction = () => {
+export const transaction = () => {
   /** @type {Set<(() => void)>} */
   let transaction = new Set()
 

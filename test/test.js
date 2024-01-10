@@ -4,10 +4,11 @@ import { strict as assert, fail } from "assert"
 import {
   withTracking,
   getTracked,
+  throttled,
+  transaction,
   signal,
   effect,
-  computed,
-  throttled
+  computed
 } from "../tendril.js"
 
 describe('withTracking', () => {
@@ -56,6 +57,55 @@ describe('throttled', () => {
     inc()
 
     await Promise.resolve()
+
+    assert(count === 1)
+  })
+})
+
+describe('transaction', () => {
+  it('executes the transaction immediately', () => {
+    const didChange = transaction()
+    
+    let didRun = false
+    didChange.withTransaction(() => {
+      didRun = true
+    })
+
+    didChange.transact()
+
+    assert(didRun)
+  })
+
+  it('adds listeners only once', () => {
+    const didChange = transaction()
+    
+    let count = 0
+    const inc = () => {
+      count++
+    }
+
+    didChange.withTransaction(inc)
+    didChange.withTransaction(inc)
+    didChange.withTransaction(inc)
+
+    didChange.transact()
+
+    assert(count === 1)
+  })
+
+  it('executes listeners only once, on next transaction, then drops them', () => {
+    const didChange = transaction()
+    
+    let count = 0
+    const inc = () => {
+      count++
+    }
+
+    didChange.withTransaction(inc)
+
+    didChange.transact()
+    didChange.transact()
+    didChange.transact()
 
     assert(count === 1)
   })
