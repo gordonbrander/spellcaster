@@ -1,5 +1,5 @@
 import { describe, it } from "mocha"
-import { strict as assert, fail } from "assert"
+import { strict as assert, strictEqual as assertEqual, fail } from "assert"
 
 import {
   withTracking,
@@ -258,5 +258,102 @@ describe('store', () => {
     const [state, send] = store({init, update})
 
     assert(isSignal(state))
+  })
+
+  it('updates the state immediately', () => {
+    const Msg = {}
+    Msg.inc = {type: 'inc'}
+
+    const init = () => next({count: 0})
+
+    const update = (state, msg) => {
+      switch (msg.type) {
+      case 'inc':
+        return next({...state, count: state.count + 1})
+      default:
+        return next(state)
+      }
+    }
+
+    const [state, send] = store({init, update})
+
+    assert(state().count === 0)
+
+    send(Msg.inc)
+
+    assert(state().count === 1)
+  })
+
+  it('runs effects', done => {
+    const TIMEOUT = 0
+
+    const Msg = {}
+    Msg.incLater = {type: 'incLater'}
+    Msg.inc = {type: 'inc'}
+
+    const delay = (value, ms) => new Promise(resolve => {
+      setTimeout(
+        () => resolve(value),
+        ms
+      )
+    })
+
+    const init = () => next({count: 0})
+
+    const update = (state, msg) => {
+      switch (msg.type) {
+      case 'incLater':
+        const fx = () => delay(Msg.inc, TIMEOUT)
+        return next(state, [fx])
+      case 'inc':
+        return next({...state, count: state.count + 1})
+      default:
+        return next(state)
+      }
+    }
+
+    const [state, send] = store({init, update})
+    send(Msg.incLater)
+
+    setTimeout(
+      () => {
+        assertEqual(state().count, 1)
+        done()
+      },
+      TIMEOUT + 1
+    )
+  })
+
+  it('runs effects that immediately return a value', done => {
+    const TIMEOUT = 0
+
+    const Msg = {}
+    Msg.incLater = {type: 'incLater'}
+    Msg.inc = {type: 'inc'}
+
+    const init = () => next({count: 0})
+
+    const update = (state, msg) => {
+      switch (msg.type) {
+      case 'incLater':
+        const fx = () => Msg.inc
+        return next(state, [fx])
+      case 'inc':
+        return next({...state, count: state.count + 1})
+      default:
+        return next(state)
+      }
+    }
+
+    const [state, send] = store({init, update})
+    send(Msg.incLater)
+
+    setTimeout(
+      () => {
+        assertEqual(state().count, 1)
+        done()
+      },
+      TIMEOUT + 1
+    )
   })
 })

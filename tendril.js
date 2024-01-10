@@ -218,7 +218,7 @@ export const effect = perform => {
 
 /**
  * @template Msg
- * @typedef {(() => Promise<Msg?>)|(() => Msg?)} Effect
+ * @typedef {(() => Promise<Msg>)|(() => Msg)} Effect
  */
 
 /**
@@ -279,12 +279,7 @@ export const store = ({
    * Run an effect
    * @param {Effect<Msg>} effect
    */
-  const runEffect = async (effect) => {
-    const msg = await effect()
-    if (msg != null) {
-      send(msg)
-    }
-  }
+  const runEffect = async (effect) => send(await effect())
 
   /**
    * Run an array of effects concurrently
