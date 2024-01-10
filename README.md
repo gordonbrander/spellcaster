@@ -225,7 +225,7 @@ send({type: 'increment'})
 console.log(state()) // {count: 1}
 ```
 
-Transactions can also include asynchronous side-effects, such as HTTP requests and timers. Effects are modeled as promises that resolve to a `msg`.
+Transactions can also include asynchronous side-effects, such as HTTP requests and timers. Effects are modeled as zero-argument functions that return a message, or a promise for a message.
 
 ```js
 // Fetches count from API and returns it as a message
@@ -238,8 +238,8 @@ const fetchCount = async () => {
 const update = (state, msg) => {
   switch (msg.type) {
   case 'fetchCount':
-    // Include list of of effects with transaction
-    return next(state, [fetchCount()])
+    // Include effects with transaction
+    return next(state, [fetchCount])
   case 'setCount':
     return next({...state, count: msg.count})
   default:
@@ -248,7 +248,7 @@ const update = (state, msg) => {
 }
 ```
 
-Store will await each of the promises in the array of effects, and then feed their resulting messages back into the store. This allows you to model side-effects along with state changes in your reducer function, making side-effects deterministic and predictable.
+Store will perform each effect concurrently, and feed their resulting messages back into the store. This allows you to model side-effects along with state changes in your reducer function, making side-effects deterministic and predictable.
 
 ## Hyperscript
 

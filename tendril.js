@@ -33,7 +33,7 @@ export const dependencyTracker = () => {
   return {withTracking, getTracked}
 }
 
-const {withTracking, getTracked} = dependencyTracker()
+export const {withTracking, getTracked} = dependencyTracker()
 
 /**
  * Given a zero-argument function, create a throttled version of that function
@@ -217,8 +217,8 @@ export const effect = perform => {
 }
 
 /**
- * @template T
- * @typedef {Promise<T>|T|null} Effect
+ * @template Msg
+ * @typedef {(() => Promise<Msg?>)|(() => Msg?)} Effect
  */
 
 /**
@@ -275,13 +275,21 @@ export const store = ({
     runEffects(effects)
   }
 
+  /**
+   * Run an effect
+   * @param {Effect<Msg>} effect
+   */
   const runEffect = async (effect) => {
-    const msg = await effect
+    const msg = await effect()
     if (msg != null) {
       send(msg)
     }
   }
 
+  /**
+   * Run an array of effects concurrently
+   * @param {Array<Effect<Msg>>} effects 
+   */
   const runEffects = effects => effects.forEach(runEffect)
 
   runEffects(initial.effects)
@@ -316,12 +324,12 @@ export const unknown = (state, msg) => {
  * signals, allowing the child signal to be garbaged.
  * 
  * @template T
- * @param {() => (T|undefined|null)} signalT - a signal
+ * @param {() => (T|undefined|null)} maybeSignal - a signal
  * @returns {() => T} - a signal that stops listening and changing after
- *   `signalT` returns null.
+ *   `maybeSignal` returns null.
  */
-export const takeValues = signalT => {
-  const initial = signalT()
+export const takeValues = maybeSignal => {
+  const initial = maybeSignal()
 
   if (initial == null) {
     throw new TypeError("Signal initial value cannot be null")
@@ -335,7 +343,7 @@ export const takeValues = signalT => {
       return state
     }
 
-    const next = signalT()
+    const next = maybeSignal()
 
     if (next != null) {
       state = next
