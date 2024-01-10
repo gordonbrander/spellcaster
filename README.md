@@ -1,5 +1,7 @@
 # Tendril
 
+![Node.js CI status](https://github.com/gordonbrander/tendril/actions/workflows/node.js.yml/badge.svg?branch=main)
+
 The lightest FRP signals library.
 
 - Less than 4kb
