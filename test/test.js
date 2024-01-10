@@ -8,7 +8,11 @@ import {
   transaction,
   signal,
   effect,
-  computed
+  computed,
+  next,
+  store,
+  isSignal,
+  sample
 } from "../tendril.js"
 
 describe('withTracking', () => {
@@ -143,6 +147,45 @@ describe('signal setter', () => {
   })
 })
 
+describe('isSignal', () => {
+  it('returns true for signal', () => {
+    const [value, setValue] = signal(0)
+    assert(isSignal(value))
+  })
+
+  it('returns true for computed', () => {
+    const [a, setA] = signal(0)
+    const [b, setB] = signal(0)
+    const sum = computed(() => a() + b())
+    assert(isSignal(sum))
+  })
+
+  it('returns true for any zero-argument function', () => {
+    const constantZero = () => 0
+    assert(isSignal(constantZero))
+  })
+
+  it('returns false for functions with arguments ', () => {
+    const id = value => value
+    assert(isSignal(id) === false)
+  })
+})
+
+describe('sample', () => {
+  it('samples a value', () => {
+    assert(sample(0) === 0)
+  })
+
+  it('samples a signal', () => {
+    const constantZero = () => 0
+    assert(sample(constantZero) === 0)
+  })
+
+  it('treats functions with arguments as values, not signals', () => {
+    const id = value => value
+    assert(sample(id) === id)
+  })
+})
 
 describe('effect', () => {
   it('executes once on initialization', done => {
@@ -192,5 +235,28 @@ describe('computed', () => {
     await Promise.resolve()
 
     assert(sum() === 20)
+  })
+})
+
+describe('next', () => {
+  it('returns a transaction object', () => {
+    const fx = () => {}
+    const transaction = next(0, [fx])
+
+    assert(typeof transaction === 'object')
+    assert(transaction.state === 0)
+    assert(transaction.effects.length === 1)
+    assert(transaction.effects[0] === fx)
+  })
+})
+
+describe('store', () => {
+  it('returns a signal as the first item of the array pair', () => {
+    const init = () => next({})
+    const update = (state, msg) => next({})
+
+    const [state, send] = store({init, update})
+
+    assert(isSignal(state))
   })
 })
