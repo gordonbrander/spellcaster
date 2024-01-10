@@ -1,8 +1,8 @@
-# Spellcaster
+# 👋🔮 Spellcaster
 
 ![Node.js CI status](https://github.com/gordonbrander/spellcaster/actions/workflows/node.js.yml/badge.svg?branch=main)
 
-Reactive UI without the dark magic.
+Reactive UI without dark magic.
 
 - Fine-grained reactive signals with automatic dependency tracking
 - Vanilla JavaScript with types provided by JSDoc
@@ -198,7 +198,7 @@ Simple apps that use local component state may not need `computed`, but it comes
 `store` offers an Elm/Redux-like store for managing application state.
 
 - All application state can be centralized in a single store.
-- State is only be updated via a reducer function, making state changes predictable and reproducible.
+- State is updated via a reducer function, making state changes predictable and reproducible.
 - Store manages asynchronous side-effects with an effects runner.
 
 `store` can be initialized and used much like `signal`. However, instead of being initialized with a value, it is initialized with two functions: `init()` and `update(state, msg)`. Both functions return a transaction object (created with `next`) that contains the next state. Store returns a signal for the state, as well as a send function that allows you to send messages to the store.
