@@ -6,7 +6,8 @@ import {
   getTracked,
   signal,
   effect,
-  computed
+  computed,
+  throttled
 } from "../tendril.js"
 
 describe('withTracking', () => {
@@ -39,6 +40,24 @@ describe('getTracked', () => {
     const dependency = getTracked()
 
     assert(dependency == null)
+  })
+})
+
+describe('throttled', () => {
+  it('batches calls, only executing once per microtask', async () => {
+    let count = 0
+
+    const inc = throttled(() => {
+      count++
+    })
+
+    inc()
+    inc()
+    inc()
+
+    await Promise.resolve()
+
+    assert(count === 1)
   })
 })
 
