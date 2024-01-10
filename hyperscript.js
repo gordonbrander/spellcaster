@@ -113,12 +113,8 @@ export const children = (...children) => parent => {
 /**
  * Write a signal of strings to the text content of a parent element.
  */
-export const text = text => parent => {
-  effect(() => {
-    parent.textContent = sample(text) ?? ''
-  })
-  return parent
-}
+export const text = text => parent =>
+  effect(() => setProp(parent, 'textContent', sample(text) ?? ''))
 
 const noOp = () => {}
 
