@@ -1,5 +1,11 @@
 {
   "type": "module",
+  "scripts": {
+    "test": "mocha"
+  },
+  "directories": {
+    "test": "./test"
+  },
   "devDependencies": {
     "mocha": "^10.2.0"
   }
