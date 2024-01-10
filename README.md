@@ -152,7 +152,7 @@ const viewModal = (isHidden, ...childViews) => h(
 
 Passing down signals allows you to share reactive state between components. You can even centralize all of your application state into one signal, and pass down scoped signals to sub-components using `computed`.
 
-Signals give you rrgonomic, efficient, reactive components, without a virtual DOM or compile step.
+Signals give you ergonomic, efficient, reactive components, without a virtual DOM or compile step.
 
 ## Deriving signals with `computed`
 
