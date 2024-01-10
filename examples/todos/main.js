@@ -3,7 +3,7 @@ import {
   computed,
   next,
   unknown
-} from '../../tendril.js'
+} from '../../spellcaster.js'
 
 import {
   h,

@@ -3,7 +3,7 @@ import {
   effect,
   takeValues,
   sample
-} from './tendril.js'
+} from './spellcaster.js'
 
 /**
  * The counter that is incremented for `cid()`

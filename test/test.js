@@ -13,7 +13,7 @@ import {
   store,
   isSignal,
   sample
-} from "../tendril.js"
+} from "../spellcaster.js"
 
 describe('withTracking', () => {
   it('executes the body function immediately and returns the value', () => {
