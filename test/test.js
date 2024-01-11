@@ -12,7 +12,8 @@ import {
   next,
   store,
   isSignal,
-  sample
+  sample,
+  takeValues
 } from "../spellcaster.js"
 
 describe('withTracking', () => {
@@ -144,6 +145,25 @@ describe('signal setter', () => {
     const [state, setState] = signal(0)
     setState(10)
     assert(state() === 10)
+  })
+
+  it('does not trigger reactions for values that are equal to the currently set value', async() => {
+    const [state, setState] = signal(0)
+    setState(10)
+    setState(10)
+    setState(10)
+
+    let hitCount = 0
+    effect(() => {
+      // Access value so that effect triggers
+      state()
+
+      hitCount++
+    })
+
+    await Promise.resolve()
+
+    assertEqual(hitCount, 1)
   })
 })
 
@@ -365,5 +385,33 @@ describe('store', () => {
       },
       TIMEOUT + 1
     )
+  })
+})
+
+describe('takeValues', () => {
+  it('ends the signal on the first null or undefined value', async () => {
+    const [maybeValue, setMaybeValue] = signal('a')
+
+    const value = takeValues(maybeValue)
+    setMaybeValue('b')
+
+    await Promise.resolve()
+
+    assert(value() === 'b')
+
+    // Should end `value` signal
+    setMaybeValue(null)
+
+    await Promise.resolve()
+
+    assert(value() === 'b')
+
+    // `value` signal should be ended at this point, and should never see these.
+    setMaybeValue('c')
+    setMaybeValue('d')
+
+    await Promise.resolve()
+
+    assert(value() === 'b')
   })
 })
