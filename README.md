@@ -85,7 +85,7 @@ const viewCounter = () => {
     children(
       h(
         'div',
-        {className: 'count'},
+        {className: 'counter'},
         text(count)
       ),
       h(
@@ -110,10 +110,10 @@ const viewCounter = () => {
   const wrapper = document.createElement('div')
   wrapper.className = 'wrapper'
 
-  // Create count element
-  const count = document.createElement('div')
-  count.className = 'count'
-  wrapper.append(count)
+  // Create counter element
+  const counter = document.createElement('div')
+  counter.className = 'counter'
+  wrapper.append(counter)
 
   // Create button
   const button = document.createElement('button')
@@ -123,13 +123,13 @@ const viewCounter = () => {
   wrapper.append(button)
 
   // Write text whenever signal changes
-  effect(() => count.textContent = text())
+  effect(() => counter.textContent = count())
 
   return wrapper
 }
 ```
 
-We can see that hyperscript is just an ergonomic way to build elements. We're just constructing and returning ordinary DOM elements here! Since signals are reactive representations of values, the returned element is reactive. When the signal value changes, the element automatically updates, making precision changes to the DOM. No virtual DOM diffing is needed!
+We can see that hyperscript is just an ergonomic way to build ordinary DOM elements. Since signals are reactive, the returned element is also reactive. When the signal value changes, the element automatically updates, making precision changes to the DOM. No virtual DOM diffing is needed!
 
 The above example uses `signal` for local component state, but you can also pass a signal down from a parent.
 
@@ -150,9 +150,9 @@ const viewModal = (isHidden, ...childViews) => h(
 )
 ```
 
-Passing down signals allows you to share reactive state between components. You can even centralize all of your application state into one signal, and pass down scoped signals to sub-components using `computed`.
+Passing down signals allows you to share reactive state between components. You can even centralize all of your application state into one signal, passing down scoped signals to sub-components using `computed`.
 
-Signals give you ergonomic, efficient, reactive components, without a virtual DOM or compile step.
+Signals give you ergonomic, efficient, reactive components, without the need for a virtual DOM or compile step.
 
 ## Deriving signals with `computed`
 
