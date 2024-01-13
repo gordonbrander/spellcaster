@@ -4,6 +4,10 @@
   "license": "MIT",
   "keywords": ["reactive", "frp", "signals"],
   "type": "module",
+  "exports": {
+    "./spellcaster.js": "./spellcaster.js",
+    "./hyperscript.js": "./hyperscript.js"
+  },
   "scripts": {
     "test": "mocha"
   },
