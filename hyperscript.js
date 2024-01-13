@@ -105,9 +105,12 @@ export const insertElementAt = (parent, element, index) => {
 }
 
 export const children = (...children) => parent => {
-  for (const child of children) {
-    parent.append(child)
-  }
+  parent.replaceChildren(...children)
+}
+
+export const shadow = (...children) => parent => {
+  parent.attachShadow({mode: 'open'})
+  parent.shadowRoot.replaceChildren(...children)
 }
 
 /**
@@ -118,14 +121,17 @@ export const text = text => parent =>
 
 const noOp = () => {}
 
+const isArray = Array.isArray
+
 /**
  * Signals-aware hyperscript.
  * Create an element that can be updated with signals.
  * @param {string} tag - the HTML element type to create
  * @param {(() => object)|object} properties - a signal or object containing
  *   properties to set on the element.
- * @param {(element: HTMLElement) => void} configure - a function called with
- *   the element allowing for further configuration.
+ * @param {(element: HTMLElement) => void|Array<(HTMLElement|string)>} configure
+ *   - either a function called with the element to configure it, or an array
+ *   of HTMLElements and strings to append.
  * @returns {HTMLElement}
  */
 export const h = (tag, properties, configure=noOp) => {
@@ -135,10 +141,49 @@ export const h = (tag, properties, configure=noOp) => {
     setProps(element, sample(properties))
   })
 
-  configure(element)
+  if (isArray(configure)) {
+    element.replaceChildren(...configure)
+  } else {
+    configure(element)
+  }
 
   return element
 }
+
+/**
+ * @callback TagFactory
+ * @param {(() => object)|object} properties - a signal or object containing
+ *   properties to set on the element.
+ * @param {(element: HTMLElement) => void|Array<(HTMLElement|string)>} configure
+ *   - either a function called with the element to configure it, or an array
+ *   of HTMLElements and strings to append.
+ * @returns {HTMLElement}
+ */
+
+/**
+ * Create a tag factory function - a specialized version of `h()` for a
+ * specific tag.
+ * @param {string} tag 
+ * @returns {TagFactory}
+ */
+const tag = tag => (properties, configure=noOp) =>
+  h(tag, properties, configure)
+
+/**
+ * Create a tag factory function, by calling any proprty of `tags`.
+ * The key will be used as the tag name for the factory.
+ * @example
+ * const {div} = tags
+ * div({className: 'wrapper'})
+ */
+export const tags = new Proxy({}, {
+  get: (target, key) => {
+    if (typeof key !== 'string') {
+      throw new TypeError('Tag must be string')
+    }
+    return tag(key)
+  }
+})
 
 /**
  * Layout-triggering DOM properties.
@@ -169,6 +214,7 @@ export const setProp = (object, key, value) => {
   }
 
   if (object[key] !== value) {
+    console.log({prev: object[key], next: value})
     object[key] = value
   }
 }
@@ -179,14 +225,6 @@ export const setProp = (object, key, value) => {
  * @param {object} props
  */
 const setProps = (element, props) => {
-  const attrs = element.getAttributeNames()
-  // Reset properties not present in `props` by looking at attributes and
-  // removing them if there is not a corresponding key in props.
-  for (const key of attrs) {
-    if (props[key] == null) {
-      element.removeAttribute(key)
-    }
-  }
   for (const [key, value] of Object.entries(props)) {
     setProp(element, key, value)
   }

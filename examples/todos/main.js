@@ -6,23 +6,24 @@ import {
 } from '../../spellcaster.js'
 
 import {
-  h,
-  children,
+  tags,
   repeat,
   text,
   cid,
   index
 } from '../../hyperscript.js'
 
-const msg = {}
+const {div, button, input} = tags
 
-msg.complete = id => ({
+const Msg = {}
+
+Msg.complete = id => ({
   type: 'complete',
   id
 })
 
-msg.updateInput = value => ({type: 'updateInput', value})
-msg.submitInput = value => ({type: 'submitInput', value})
+Msg.updateInput = value => ({type: 'updateInput', value})
+Msg.submitInput = value => ({type: 'submitInput', value})
 
 const modelTodo = ({
   id=cid(),
@@ -34,37 +35,33 @@ const modelTodo = ({
   text
 })
 
-const viewTodo = (todo, send) => h(
-  'div',
+const Todo = (todo, send) => div(
   {className: 'todo'},
-  children(
-    h(
-      'div',
+  [
+    div(
       {className: 'todo-text'},
       text(() => todo().text)
     ),
-    h(
-      'button',
+    button(
       {
         className: 'button-done',
-        onclick: () => send(msg.complete(todo().id, true))
+        onclick: () => send(Msg.complete(todo().id, true))
       },
       text('Done')
     )
-  )
+  ]
 )
 
 const modelInput = ({text=''}) => ({text})
 
-const viewInput = (input, send) => h(
-  'input',
+const TodoInput = (state, send) => input(
   () => ({
-    value: input().text,
+    value: state().text,
     placeholder: 'Enter todo...',
-    oninput: event => send(msg.updateInput(event.target.value)),
+    oninput: event => send(Msg.updateInput(event.target.value)),
     onkeyup: event => {
       if (event.key === 'Enter') {
-        send(msg.submitInput(event.target.value))
+        send(Msg.submitInput(event.target.value))
       }
     },
     type: 'text',
@@ -80,20 +77,18 @@ const modelApp = ({
   todos
 })
 
-const viewApp = (state, send) => h(
-  'div',
+const App = (state, send) => div(
   {className: 'app'},
-  children(
-    viewInput(
+  [
+    TodoInput(
       computed(() => state().input),
       send
     ),
-    h(
-      'div',
+    div(
       {className: 'todos'},
-      repeat(viewTodo, computed(() => state().todos), send)
+      repeat(Todo, computed(() => state().todos), send)
     )
-  )
+  ]
 )
 
 const init = () => next(
@@ -148,5 +143,5 @@ const [state, send] = store({
 
 window.state = state
 
-const appEl = viewApp(state, send)
+const appEl = App(state, send)
 document.body.append(appEl)

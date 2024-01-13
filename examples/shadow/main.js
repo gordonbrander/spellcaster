@@ -1,5 +1,5 @@
 import { signal } from '../../spellcaster.js'
-import { tags, text } from '../../hyperscript.js'
+import { shadow, tags, text } from '../../hyperscript.js'
 const {div, button} = tags
 
 const viewCounter = () => {
@@ -7,7 +7,7 @@ const viewCounter = () => {
 
   return div(
     {className: 'counter'},
-    [
+    shadow(
       div({className: 'counter-text'}, text(count)),
       button(
         {
@@ -16,7 +16,7 @@ const viewCounter = () => {
         },
         text('Increment')
       )
-    ]
+    )
   )
 }
 
