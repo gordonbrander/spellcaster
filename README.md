@@ -131,14 +131,13 @@ We can see that hyperscript is just an ergonomic way to build ordinary DOM eleme
 The above example uses `signal` for local component state, but you can also pass a signal down from a parent.
 
 ```js
-const Title = title => h('h1', {className: 'title'}, text(title))
+const Title = title => h1({className: 'title'}, text(title))
 ```
 
 Here's a more complex example, with some dynamic properties. Instead of passing `h()` a props object, we'll pass it a function that returns an object. This function is evaluated within a reactive scope, so whenever `isHidden()` changes, the props are updated.
 
 ```js
-const Modal = (isHidden, children) => h(
-  'div',
+const Modal = (isHidden, children) => div(
   () => ({
     className: 'modal',
     hidden: isHidden()
