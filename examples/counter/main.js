@@ -1,8 +1,8 @@
-import { signal } from '../../spellcaster.js'
-import { tags, text } from '../../hyperscript.js'
+import {signal} from '../../spellcaster.js'
+import {tags, text} from '../../hyperscript.js'
 const {div, button} = tags
 
-const viewCounter = () => {
+const Counter = () => {
   const [count, setCount] = signal(0)
 
   return div(
@@ -20,4 +20,4 @@ const viewCounter = () => {
   )
 }
 
-document.body.append(viewCounter())
+document.body.append(Counter())
