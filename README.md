@@ -74,31 +74,28 @@ Here's a simple counter example using signals and hyperscript.
 
 ```js
 import {signal} from './spellcaster.js'
-import {h, text, children} from './hyperscript.js'
+import {tags, text} from './hyperscript.js'
+const {div, button} = tags
 
-const viewCounter = () => {
+const Counter = () => {
   const [count, setCount] = signal(0)
 
-  return h(
-    'div',
-    {className: 'wrapper'},
-    children(
-      h(
-        'div',
-        {className: 'counter'},
-        text(count)
-      ),
-      h(
-        'button',
-        {onclick: () => setCount(count() + 1)},
+  return div(
+    {className: 'counter'},
+    [
+      div({className: 'counter-text'}, text(count)),
+      button(
+        {
+          className: 'counter-button',
+          onclick: () => setCount(count() + 1)
+        },
         text('Increment')
       )
-    )
+    ]
   )
 }
 
-const view = viewCounter()
-document.body.append(view)
+document.body.append(Counter())
 ```
 
 What's going on here? To make sense of this, let's rewrite this component using only signals and vanilla DOM methods.
@@ -129,24 +126,23 @@ const viewCounter = () => {
 }
 ```
 
-We can see that hyperscript is just an ergonomic way to build ordinary DOM elements. Since signals are reactive, the returned element is also reactive. When the signal value changes, the element automatically updates, making precision changes to the DOM. No virtual DOM diffing is needed!
+We can see that hyperscript is just an ergonomic way to build ordinary DOM elements. Since signals are reactive, the returned element is also reactive. When the signal value changes, the element automatically updates, making precision updates to the DOM. No virtual DOM diffing is needed!
 
 The above example uses `signal` for local component state, but you can also pass a signal down from a parent.
 
 ```js
-const viewTitle = title => h('h1', {className: 'title'}, text(title))
+const Title = title => h1({className: 'title'}, text(title))
 ```
 
 Here's a more complex example, with some dynamic properties. Instead of passing `h()` a props object, we'll pass it a function that returns an object. This function is evaluated within a reactive scope, so whenever `isHidden()` changes, the props are updated.
 
 ```js
-const viewModal = (isHidden, ...childViews) => h(
-  'div',
+const Modal = (isHidden, children) => div(
   () => ({
     className: 'modal',
     hidden: isHidden()
   }),
-  children(...childViews)
+  children
 )
 ```
 
@@ -259,46 +255,59 @@ h(tag, props, config)
 
 - Parameters
   - `tag` - a string for the tag to be created
-  - `props:` - an object, or a signal for an object that contains props to be set on the element
-  - `config(element)?` - an optional callback that receives the constructed element and can modify it
+  - `props` - an object, or a signal for an object that contains props to be set on the element
+  - `config(HTMLElement)|Array<HTMLElement|string>` - an array of elements and strings, OR an optional callback that receives the element and can modify it
 - Returns: `HTMLElement` - the constructed element
 
-`h()` can be used with config helpers like `text()` and `children()` to efficiently build HTML elements.
+Here's a simple hello world example.
 
 ```js
-const viewTitle = title => h(
-  'h1',
+const Greeting = greeting => h(
+  'p',
+  {className: 'greeting'},
+  [
+    greeting
+  ]
+)
+
+Greeting("Hello world")
+```
+
+Alternatively, we can use the hyperscript `tags` object to get named hyperscript functions:
+
+```js
+import {tags} from './hyperscript.js'
+const {div} = tags
+
+const Greeting = title => div({className: 'greeting'}, [title])
+```
+
+Clean! Now let's add some interactivity. Hyperscript is signals-aware, so we can use signals to drive element changes.
+
+```js
+const Title = title => h1(
   {className: 'title'},
-  // Set text content of element
+  // Automatically update the text content of the element with a signal
   text(title)
 )
 
-const viewModal = (isHidden, ...content) => h(
-  'div',
+const Modal = (isHidden, children) => div(
+  // Automatically update properties with signals, by passing a function that
+  // returns an object.
   () => ({
     className: 'modal',
     hidden: isHidden()
   }),
-  // Assign a static list of children to element
-  children(...content)
-)
-
-const viewCustom = () => h(
-  'div',
-  {},
-  element => {
-    // Custom logic
-  }
+  children
 )
 ```
 
-What about rendering dynamic lists of children? For this, we can use `repeat()`. It takes a `() => Map<Key, Item>` and will efficiently re-render children, updating, moving, or removing elements as needed, making the minimal number of DOM modifications.
+What about rendering dynamic lists of children? For this, we can use `repeat(view, signal, extra)`. It takes a signal of `Map<Key, Item>`, and will efficiently re-render children, updating, moving, or removing elements as needed, making the minimal number of DOM modifications.
 
 ```js
-const viewTodos = todos => h(
-  'div',
+const Todos = todos => div(
   {className: 'todos'},
-  repeat(todos, viewTodo)
+  repeat(Todo, todos)
 )
 ```
 
