@@ -214,7 +214,6 @@ export const setProp = (object, key, value) => {
   }
 
   if (object[key] !== value) {
-    console.log({prev: object[key], next: value})
     object[key] = value
   }
 }
