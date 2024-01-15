@@ -349,3 +349,60 @@ export const takeValues = maybeSignal => {
     }
   })
 }
+
+/**
+ * @template Msg
+ * @typedef {object} Router
+ * @property {(route: string, msg: Msg) => void} navigate
+ * @property {() => void} disconnect
+ */
+
+/**
+ * Creates a router for driving UI state via the history API.
+ * Typically used with `store` to send messages to store via history changes.
+ *
+ * @example
+ * const Msg = {}
+ * Msg.home = (route, state) => ({type: 'home', state})
+ * Msg.setState = state => ({type: 'setState', state})
+ * // ...
+ *
+ * const update = (state, msg) => {
+ *   switch (msg.type) {
+ *   case 'home':
+ *     const fx = () => navigate('home', {...})
+ *     // Make any updates to state
+ *     const model = {...state}
+ *     return next(model, [fx])
+ *   case 'setState':
+ *     return setState(state, msg.state)
+ *   }
+ * }
+ *
+ * const [state, send] = store({init, update})
+ *
+ * const {navigate} = router(
+ *   state => send(Msg.setState(state))
+ * )
+ *
+ * @template Msg
+ * @param {(Msg) => void} onNavigate - the callback to call when history is
+ *   changed by UA or APIs.
+ * @returns {Router<Msg>}
+ */
+export const router = onNavigate => {
+  const onPopState = event => onNavigate(event.state)
+
+  window.addEventListener('popstate', onPopState)
+
+  const navigate = (route, msg) => history.pushState(route, "", msg)
+
+  /**
+   * Disconnect router, tearing down all event listeners
+   */
+  const disconnect = () => {
+    window.removeEventListener('popstate', onPopState)
+  }
+
+  return {navigate, disconnect}
+}
