@@ -31,7 +31,7 @@ export const getId = object => object.id
 export const index = (iter, getKey=getId) => {
   const indexed = new Map()
   for (const item of iter) {
-    indexed.set(getId(item), item)
+    indexed.set(getKey(item), item)
   }
   return indexed
 }
@@ -163,27 +163,35 @@ export const h = (tag, properties, configure=noOp) => {
 /**
  * Create a tag factory function - a specialized version of `h()` for a
  * specific tag.
+ * @example
+ * const div = tag('div')
+ * div({className: 'wrapper'})
  * @param {string} tag 
  * @returns {TagFactory}
  */
-const tag = tag => (properties, configure=noOp) =>
+export const tag = tag => (properties, configure=noOp) =>
   h(tag, properties, configure)
 
 /**
- * Create a tag factory function, by calling any proprty of `tags`.
+ * Create a tag factory function by accessing any proprty of `tags`.
  * The key will be used as the tag name for the factory.
+ * Key must be a string, and will be passed verbatim as the tag name to
+ * `document.createElement()` under the hood.
  * @example
  * const {div} = tags
  * div({className: 'wrapper'})
  */
-export const tags = new Proxy({}, {
-  get: (target, key) => {
-    if (typeof key !== 'string') {
-      throw new TypeError('Tag must be string')
+export const tags = new Proxy(
+  Object.freeze({}),
+  {
+    get: (_, key) => {
+      if (typeof key !== 'string') {
+        throw new TypeError('Tag must be string')
+      }
+      return tag(key)
     }
-    return tag(key)
   }
-})
+)
 
 /**
  * Layout-triggering DOM properties.
