@@ -254,9 +254,9 @@ h(tag, props, config)
 ```
 
 - Parameters
-  - `tag` - a string for the tag to be created
-  - `props` - an object, or a signal for an object that contains props to be set on the element
-  - `config(HTMLElement)|Array<HTMLElement|string>` - an array of elements and strings, OR an optional callback that receives the element and can modify it
+  - `{string} tag` - a string for the tag to be created
+  - `{object} props` - an object, or a signal for an object that contains props to be set on the element
+  - `{Array<HTMLElement|string>|(HTMLElement) => void} config` - an array of elements and strings, OR an optional callback that receives the element and can modify it
 - Returns: `HTMLElement` - the constructed element
 
 Here's a simple hello world example.
