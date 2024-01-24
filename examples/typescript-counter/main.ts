@@ -1,13 +1,13 @@
 import {signal} from '../../spellcaster.js'
-import {tags, shadow, text} from '../../hyperscript.js'
+import {tags, text} from '../../hyperscript.js'
 const {div, button} = tags
 
-const Counter = () => {
+const Counter = (): HTMLElement => {
   const [count, setCount] = signal(0)
 
   return div(
     {className: 'counter'},
-    shadow(
+    [
       div({className: 'counter-text'}, text(count)),
       button(
         {
@@ -16,7 +16,7 @@ const Counter = () => {
         },
         text('Increment')
       )
-    )
+    ]
   )
 }
 

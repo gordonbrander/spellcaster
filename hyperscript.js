@@ -114,7 +114,9 @@ export const shadow = (...children) => parent => {
 }
 
 /**
- * Write a signal of strings to the text content of a parent element.
+ * Write a value or signal of values to the text content of a parent element.
+ * Value will be coerced to string. If nullish, will be coerced to empty string.
+ * @type {(text: any) => (parent: HTMLElement) => void}
  */
 export const text = text => parent =>
   effect(() => setProp(parent, 'textContent', sample(text) ?? ''))
@@ -129,9 +131,9 @@ const isArray = Array.isArray
  * @param {string} tag - the HTML element type to create
  * @param {(() => object)|object} properties - a signal or object containing
  *   properties to set on the element.
- * @param {(element: HTMLElement) => void|Array<(HTMLElement|string)>} configure
+ * @param {Array<HTMLElement|string>|((element: HTMLElement) => void)} [configure]
  *   - either a function called with the element to configure it, or an array
- *   of HTMLElements and strings to append.
+ *   of HTMLElements and strings to append. Optional.
  * @returns {HTMLElement}
  */
 export const h = (tag, properties, configure=noOp) => {
@@ -154,7 +156,7 @@ export const h = (tag, properties, configure=noOp) => {
  * @callback TagFactory
  * @param {(() => object)|object} properties - a signal or object containing
  *   properties to set on the element.
- * @param {(element: HTMLElement) => void|Array<(HTMLElement|string)>} configure
+ * @param {Array<HTMLElement|string>|((element: HTMLElement) => void)} [configure]
  *   - either a function called with the element to configure it, or an array
  *   of HTMLElements and strings to append.
  * @returns {HTMLElement}
@@ -177,6 +179,7 @@ export const tag = tag => (properties, configure=noOp) =>
  * The key will be used as the tag name for the factory.
  * Key must be a string, and will be passed verbatim as the tag name to
  * `document.createElement()` under the hood.
+ * @type {Object<string, TagFactory>}
  * @example
  * const {div} = tags
  * div({className: 'wrapper'})
