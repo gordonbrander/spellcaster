@@ -14,7 +14,7 @@ import {
   isSignal,
   sample,
   takeValues
-} from "../spellcaster.js"
+} from "../dist/spellcaster.js"
 
 describe('withTracking', () => {
   it('executes the body function immediately and returns the value', () => {

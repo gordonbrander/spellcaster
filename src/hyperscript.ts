@@ -13,7 +13,7 @@ let _cid = 0
  */
 export const cid = (): string => `cid${_cid++}`
 
-export type Identifiable<Key> = {id: Key}
+export interface Identifiable<Key> {id: Key}
 
 export const getId = <Key>(item: Identifiable<Key>) => item.id
 
@@ -28,6 +28,10 @@ export const index = <Key, Item>(
     }
     return indexed
 }
+
+export const indexById = <Key>(
+    iter: Iterable<Identifiable<Key>>
+) => index(iter, getId)
 
 /** Symbol for list item key */
 const __key__ = Symbol('list item key')

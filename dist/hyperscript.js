@@ -15,6 +15,7 @@ export const index = (iter, getKey) => {
     }
     return indexed;
 };
+export const indexById = (iter) => index(iter, getId);
 /** Symbol for list item key */
 const __key__ = Symbol('list item key');
 /**

@@ -3,12 +3,13 @@
  * IDs are NOT guaranteed to be stable across page refreshes.
  */
 export declare const cid: () => string;
-export type Identifiable<Key> = {
+export interface Identifiable<Key> {
     id: Key;
-};
+}
 export declare const getId: <Key>(item: Identifiable<Key>) => Key;
 /** Index an iterable of items by key, returning a map. */
 export declare const index: <Key, Item>(iter: Iterable<Item>, getKey: (item: Item) => Key) => Map<Key, Item>;
+export declare const indexById: <Key>(iter: Iterable<Identifiable<Key>>) => Map<Key, Identifiable<Key>>;
 /**
  * Create a function to efficiently render a dynamic list of views on a
  * parent element.
