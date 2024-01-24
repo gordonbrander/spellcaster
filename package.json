@@ -8,6 +8,7 @@
     "signals"
   ],
   "type": "module",
+  "main": "index.js",
   "exports": {
     "./spellcaster.js": "./spellcaster.js",
     "./hyperscript.js": "./hyperscript.js"
