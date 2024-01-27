@@ -5,8 +5,8 @@
 Reactive UI without dark magic.
 
 - Fine-grained reactive signals with automatic dependency tracking
-- Vanilla JavaScript with types provided by JSDoc
 - Zero dependencies, no build step
+- Vanilla JS with types provided by TypeScript
 - Less than 4kb compressed
 
 ## Introduction
@@ -16,7 +16,7 @@ Signals are reactive state containers that update whenever their values change.
 `signal` takes an intial value, and returns a getter and a setter. The getter is a zero-argument function that returns the current value, and the setter can be called to set a new value for the signal. This will feel familiar if you've ever used React hooks.
 
 ```js
-import {signal} from './spellcaster.js'
+import {signal} from 'spellcaster/spellcaster.js'
 
 const [count, setCount] = signal(0)
 
@@ -33,7 +33,7 @@ So far, so good. But signals have a hidden superpower: they're reactive!
 When we reference a signal within a rective scope, that scope will re-run whenever the signal value updates. For example, let's create a derived signal from another signal, using `computed()`.
 
 ```js
-import {signal, computed} from './spellcaster.js'
+import {signal, computed} from 'spellcaster/spellcaster.js'
 
 const [todos, setTodos] = signal([
   { text: 'Chop wood', isComplete: true },
@@ -65,7 +65,7 @@ Effect is where signals meet the real world. You can use `effect` like you might
 Spellcaster is a vanilla JavaScript module. You can import it directly. No build step needed.
 
 ```js
-import * as spellcaster from './spellcaster.js'
+import * as spellcaster from 'spellcaster/spellcaster.js'
 ```
 
 ## Creating reactive components with signals
@@ -73,8 +73,8 @@ import * as spellcaster from './spellcaster.js'
 Here's a simple counter example using signals and hyperscript.
 
 ```js
-import {signal} from './spellcaster.js'
-import {tags, text} from './hyperscript.js'
+import {signal} from 'spellcaster/spellcaster.js'
+import {tags, text} from 'spellcaster/hyperscript.js'
 const {div, button} = tags
 
 const Counter = () => {
@@ -155,7 +155,7 @@ Signals give you ergonomic, efficient, reactive components, without the need for
 `computed()` lets you to derive a signal from one or more other signals.
 
 ```js
-import {signal, computed} from './spellcaster.js'
+import {signal, computed} from 'spellcaster/spellcaster.js'
 
 const [todos, setTodos] = signal([
   { text: 'Chop wood', isComplete: true },

@@ -3,22 +3,31 @@
   "version": "0.0.5",
   "license": "MIT",
   "keywords": [
+    "spellcaster",
     "reactive",
     "frp",
     "signals"
   ],
   "type": "module",
   "exports": {
-    "./spellcaster.js": "./spellcaster.js",
-    "./hyperscript.js": "./hyperscript.js"
+    "./spellcaster.js": {
+      "import": "./dist/spellcaster.js",
+      "types": "./dist/spellcaster.d.ts"
+    },
+    "./hyperscript.js": {
+      "import": "./dist/hyperscript.js",
+      "types": "./dist/hyperscript.d.ts"
+    }
   },
   "scripts": {
-    "test": "mocha"
+    "prepare": "tsc -p tsconfig.json",
+    "test": "tsc -p tsconfig.json && mocha"
   },
   "directories": {
     "test": "./test"
   },
   "devDependencies": {
-    "mocha": "^10.2.0"
+    "mocha": "^10.2.0",
+    "typescript": "^5.3.3"
   }
 }

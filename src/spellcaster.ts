@@ -1,29 +1,20 @@
-// @ts-check
-
 /**
  * Creates a dependency tracker
  * We use this to allow signals to automatically gather their downstream
  * dependencies.
  */
 export const dependencyTracker = () => {
-  /** @type {Array<() => void>} */
-  const scopes = []
+  const scopes: Array<() => void> = []
 
-  /**
-   * Get the current tracked scope
-   * @returns {(() => void)|null}
-   */
-  const getTracked = () => scopes[scopes.length - 1]
+  /** Get the current tracked scope */
+  const getTracked = (): ((() => void) | undefined) =>
+    scopes[scopes.length - 1]
 
-  /**
-   * @template T
-   * @param {() => void} onChange the scope to set. A callback to be notified
-   *   during the next transaction.
-   * @param {() => T} perform a function to perform immediately while scope
-   *   is set.
-   * @returns {T} the value returned by perform
-   */
-  const withTracking = (onChange, perform) => {
+  /** Perform a function while setting thunk as the current tracked scope */
+  const withTracking = <T>(
+    onChange: () => void,
+    perform: () => T
+  ): T => {
     scopes.push(onChange)
     const value = perform()
     scopes.pop()
@@ -34,14 +25,12 @@ export const dependencyTracker = () => {
 }
 
 export const {withTracking, getTracked} = dependencyTracker()
-
+  
 /**
  * Given a zero-argument function, create a throttled version of that function
  * that will run only once per microtask.
- * @param {() => void} job - the function to perform
- * @returns {() => void} - a throttled version of that function
  */
-export const throttled = job => {
+export const throttled = (job: () => void): (() => void) => {
   let isScheduled = false
 
   const perform = () => {
@@ -65,16 +54,14 @@ export const throttled = job => {
  * transaction.
  */
 export const transaction = () => {
-  /** @type {Set<(() => void)>} */
-  let transaction = new Set()
+  let transaction: Set<(() => void)> = new Set()
 
   /**
    * Add listener to current transaction.
    * Listener functions are deduped. E.g. if you add the same listener twice to
    * the same transaction, it's only added once.
-   * @param {(() => void)|null} listener
    */
-  const withTransaction = listener => {
+  const withTransaction = (listener: (() => void)|undefined) => {
     if (typeof listener === 'function') {
       transaction.add(listener)
     }
@@ -103,23 +90,13 @@ export const transaction = () => {
 /**
  * Is value a signal-like function?
  * A signal is any zero-argument function.
- * @template T
- * @param {T|(() => T)} value
- * @returns {boolean}
  */
-export const isSignal = value =>
+export const isSignal = (value: any): value is (() => any) =>
   (typeof value === 'function' && value.length === 0)
-
-/**
- * Sample a value that may be a signal, or just an ordinary value
- * @template T
- * @param {T|(() => T)} value
- * @returns {T}
- */
-export const sample = value => {
-  // @ts-ignore
-  return isSignal(value) ? value() : value
-}
+  
+/** Sample a value that may be a signal, or just an ordinary value */
+export const sample = <T>(value: T|(() => T)): T =>
+  isSignal(value) ? value() : value
 
 /**
  * A signal is a reactive state container. It holds a single value which is
@@ -127,12 +104,8 @@ export const sample = value => {
  * 
  * When signal values are read within reactive scopes, such as `computed` or
  * `effect`, the scope will automatically re-execute when the signal changes.
- * 
- * @template T
- * @param {T} initial the initial state for the signal
- * @returns {[() => T, (value: T) => void]}
  */
-export const signal = initial => {
+export const signal = <T>(initial: T): [() => T, (value: T) => void] => {
   const didChange = transaction()
 
   let state = initial
@@ -141,7 +114,6 @@ export const signal = initial => {
    * Read current signal state
    * When read within reactive scopes, such as `computed` or `effect`,
    * the scope will automatically re-execute when the signal changes.
-   * @returns {T}
    */
   const read = () => {
     didChange.withTransaction(getTracked())
@@ -149,17 +121,19 @@ export const signal = initial => {
   }
 
   /**
-   * Send new value to signal
-   * @param {T} value
+   * Set signal value.
+   * A value will only be set and trigger a reactive transaction if it
+   * the new value is different from the old value as determined by a
+   * strict equality check.
    */
-  const send = value => {
+  const set = (value: T) => {
     if (state !== value) {
       state = value
       didChange.transact()
     }
   }
 
-  return [read, send]
+  return [read, set]
 }
 
 /**
@@ -169,12 +143,8 @@ export const signal = initial => {
  * `compute` is executed within a reactive scope, so signals referenced within
  * `compute` will automatically cause `compute` to be re-run when signal
  * state changes.
- * @template T
- * @param {() => T} compute - a function to compute a value. May reference any
- *   other signals.
- * @returns {() => T}
  */
-export const computed = compute => {
+export const computed = <T>(compute: () => T) => {
   const didChange = transaction()
 
   // We batch recomputes to solve the diamond problem.
@@ -206,57 +176,48 @@ export const computed = compute => {
  * `perform` is executed within a reactive scope, so signals referenced within
  * `perform` will automatically cause `perform` to be re-run when signal
  * state changes.
- * @param {() => void} perform - the side-effect to perform
  */
-export const effect = perform => {
+export const effect = (perform: () => void) => {
   const performEffect = throttled(() => {
     withTracking(performEffect, perform)
   })
-
   withTracking(performEffect, perform)
 }
 
-/**
- * @template Msg
- * @typedef {(() => Promise<Msg>)|(() => Msg)} Effect
- */
+export type Effect<Msg> = (() => Promise<Msg>)|(() => Msg)
 
-/**
- * @template State
- * @template Msg
- * @typedef {object} Transaction
- * @property {State} state
- * @property {Array<Effect<Msg>>} effects
- */
+export type Transaction<State, Msg> = {
+  state: State
+  effects: Array<Effect<Msg>>
+}
 
-/**
- * Create a transaction object for the store.
- * @template State
- * @template Msg
- * @param {State} state
- * @param {Array<Effect<Msg>>} effects
- * @returns {Transaction<State, Msg>}
- */
-export const next = (state, effects=[]) => ({state, effects})
-
+/** Create a transaction object for the store. */
+export const next = <State, Msg>(
+  state: State,
+  effects: Array<Effect<Msg>>=[]
+): Transaction<State, Msg> => ({
+  state,
+  effects
+})
+  
 /**
  * Create store for state. A web app can centralize all state in a single store,
  * and use Signals to scope store state down to DOM updates.
  * Store is inspired by the Elm App Architecture Pattern.
- * @template State
- * @template Msg
- * @param {object} options
- * @param {() => Transaction<State, Msg>} options.init
- * @param {(state: State, msg: Msg) => Transaction<State, Msg>} options.update
- * @param {boolean} options.debug - turn on debug console logging?
- * @returns {[() => State, (msg: Msg) => void]}
  */
-export const store = ({
-  init,
-  update,
-  debug=false
-}) => {
+export const store = <State, Msg>(
+  {
+    init,
+    update,
+    debug=false
+  }: {
+    init: () => Transaction<State, Msg>,
+    update: (state: State, msg: Msg) => Transaction<State, Msg>,
+    debug?: boolean
+  }
+): [() => State, (msg: Msg) => void] => {
   const initial = init()
+
   if (debug) {
     console.debug('store.state', initial.state)
     console.debug('store.effects', initial.effects.length)
@@ -264,7 +225,8 @@ export const store = ({
 
   const [state, sendState] = signal(initial.state)
 
-  const send = msg => {
+  /** Send a message to the store */
+  const send = (msg: Msg) => {
     const {state: next, effects} = update(state(), msg)
     if (debug) {
       console.debug('store.msg', msg)
@@ -275,17 +237,12 @@ export const store = ({
     runEffects(effects)
   }
 
-  /**
-   * Run an effect
-   * @param {Effect<Msg>} effect
-   */
-  const runEffect = async (effect) => send(await effect())
+  /** Run an effect */
+  const runEffect = async (effect: Effect<Msg>) => send(await effect())
 
-  /**
-   * Run an array of effects concurrently
-   * @param {Array<Effect<Msg>>} effects 
-   */
-  const runEffects = effects => effects.forEach(runEffect)
+  /** Run an array of effects concurrently */
+  const runEffects = (effects: Array<Effect<Msg>>) =>
+    effects.forEach(runEffect)
 
   runEffects(initial.effects)
 
@@ -296,15 +253,10 @@ export const store = ({
  * Log an unknown message and return a no-op transaction. Useful for handling
  * the `default` arm of a switch statement in an update function to catch
  * anything sent to the store that you don't recognize.
- * @template State
- * @template Msg
- * @param {State} state
- * @param {Msg} msg
- * @returns {Transaction<State, Msg>}
  */
-export const unknown = (state, msg) => {
+export const unknown = <State, Msg>(state: State, msg: Msg) => {
   console.warn('Unknown message type', msg)
-  return next(state)
+  return next<State, Msg>(state)
 }
 
 /**
@@ -312,18 +264,13 @@ export const unknown = (state, msg) => {
  * the given signal returns null. Once the given signal returns null, the
  * signal is considered to be complete and no further updates will occur.
  *
- * This utility is useful for signals representing a child in a dynamic collection
- * of children, where the child may cease to exist.
+ * This utility is useful for signals representing a child in a dynamic
+ * collection of children, where the child may cease to exist.
  * A computed signal looks up the child, returns null if that child no longer
  * exists. This completes the signal and breaks the connection with upstream
  * signals, allowing the child signal to be garbaged.
- * 
- * @template T
- * @param {() => (T|undefined|null)} maybeSignal - a signal
- * @returns {() => T} - a signal that stops listening and changing after
- *   `maybeSignal` returns null.
  */
-export const takeValues = maybeSignal => {
+export const takeValues = <T>(maybeSignal: (() => T|null|undefined)) => {
   const initial = maybeSignal()
 
   if (initial == null) {

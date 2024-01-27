@@ -1,6 +1,6 @@
 import { describe, it } from "mocha"
 import { strict as assert, strictEqual as assertEqual, fail } from "assert"
-import { cid, index } from "../hyperscript.js"
+import { cid, index, indexById } from "../dist/hyperscript.js"
 
 describe('cid', () => {
   it('returns a string', () => {
@@ -19,24 +19,26 @@ describe('cid', () => {
 })
 
 describe('index', () => {
-  it('indexes an array of objects to map, using ID field for key by default', () => {
-    const records = [
-      {id: 'a', text: 'Chop wood'},
-      {id: 'b', text: 'Carry water'}
-    ]
-
-    const indexedRecords = index(records)
-    assert(indexedRecords instanceof Map)
-    assert(indexedRecords.get('a').text, 'Chop wood')
-  })
-
-  it('indexes an array of objects to map, using key getter when provided', () => {
+  it('indexes an array of objects to map, using key getter provided', () => {
     const records = [
       {_key: 'a', text: 'Chop wood'},
       {_key: 'b', text: 'Carry water'}
     ]
 
     const indexedRecords = index(records, record => record._key)
+    assert(indexedRecords.get('a').text, 'Chop wood')
+  })
+})
+
+describe('indexById', () => {
+  it('indexes an array of objects to map, using ID field for key by default', () => {
+    const records = [
+      {id: 'a', text: 'Chop wood'},
+      {id: 'b', text: 'Carry water'}
+    ]
+
+    const indexedRecords = indexById(records)
+    assert(indexedRecords instanceof Map)
     assert(indexedRecords.get('a').text, 'Chop wood')
   })
 })
