@@ -1,7 +1,7 @@
 import {
-    effect,
-    takeValues,
-    sample
+  effect,
+  takeValues,
+  sample
 } from './spellcaster.js'
 
 /** The counter that is incremented for `cid()` */
@@ -13,75 +13,82 @@ let _cid = 0
  */
 export const cid = (): string => `cid${_cid++}`
 
-export interface Identifiable<Key> {id: Key}
-
-export const getId = <Key>(item: Identifiable<Key>) => item.id
-
 /** Index an iterable of items by key, returning a map. */
 export const index = <Key, Item>(
-    iter: Iterable<Item>,
-    getKey: (item: Item) => Key
-) => {
-    const indexed = new Map<Key, Item>()
-    for (const item of iter) {
-        indexed.set(getKey(item), item)
-    }
-    return indexed
+  iter: Iterable<Item>,
+  getKey: (item: Item) => Key
+): Map<Key, Item> => {
+  const indexed = new Map<Key, Item>()
+  for (const item of iter) {
+    indexed.set(getKey(item), item)
+  }
+  return indexed
 }
 
-export const indexById = <Key>(
-    iter: Iterable<Identifiable<Key>>
-) => index(iter, getId)
+/** An item that exposes an ID field that is unique within its collection */
+export interface Identifiable {
+  id: any
+}
+
+export const getId = <Key, Item extends Identifiable>(
+  item: Item
+) => item.id
+
+/** Index a collection by ID */
+export const indexById = <Key, Item extends Identifiable>(
+  iter: Iterable<Item>
+): Map<Key, Item> => index(iter, getId)
 
 /** Symbol for list item key */
 const __key__ = Symbol('list item key')
+
+/** A view-constructing function */
+export type View<State, Msg> = (
+  state: () => State,
+  send: (msg: Msg) => void
+) => HTMLElement
 
 /**
  * Create a function to efficiently render a dynamic list of views on a
  * parent element.
  */
 export const repeat = <Key, State, Msg>(
-    view: (
-        state: () => State,
-        send: (msg: Msg) => void
-    ) => HTMLElement,
-    states: () => Map<Key, State>,
-    send: (msg: Msg) => void
-) => (parent: HTMLElement) => {
-    effect(() => {
-        // Build an index of children and a list of children to remove.
-        // Note that we must build a list of children to remove, since
-        // removing in-place would change the live node list and bork iteration.
-        const children = new Map()
-        const removes = []
-        for (const child of parent.children) {
-            children.set(child[__key__], child)
-            if (!states().has(child[__key__])) {
-                removes.push(child)
-            }
-        }
+  view: View<State, Msg>,
+  states: () => Map<Key, State>,
+  send: (msg: Msg) => void
+) => (parent: HTMLElement) => effect(() => {
+  // Build an index of children and a list of children to remove.
+  // Note that we must build a list of children to remove, since
+  // removing in-place would change the live node list and bork iteration.
+  const children = new Map()
+  const removes = []
+  for (const child of parent.children) {
+    children.set(child[__key__], child)
+    if (!states().has(child[__key__])) {
+      removes.push(child)
+    }
+  }
 
-        for (const child of removes) {
-            parent.removeChild(child)
-        }
+  for (const child of removes) {
+    parent.removeChild(child)
+  }
 
-        let i = 0
-        for (const key of states().keys()) {
-            const index = i++
-            const child = children.get(key)
-            if (child != null) {
-                insertElementAt(parent, child, index)
-            } else {
-                const child = view(
-                    takeValues(() => states().get(key)),
-                    send
-                )
-                child[__key__] = key
-                insertElementAt(parent, child, index)
-            }
-        }
-    })
-}
+  let i = 0
+  for (const key of states().keys()) {
+    const index = i++
+    const child = children.get(key)
+    if (child != null) {
+      insertElementAt(parent, child, index)
+    } else {
+      const child = view(
+        takeValues(() => states().get(key)),
+        send
+      )
+      child[__key__] = key
+      insertElementAt(parent, child, index)
+    }
+  }
+})
 
 /**
  * Insert element at index.
@@ -91,28 +98,28 @@ export const repeat = <Key, State, Msg>(
  * don't move.
  */
 export const insertElementAt = (
-    parent: HTMLElement,
-    element: HTMLElement,
-    index: number
+  parent: HTMLElement,
+  element: HTMLElement,
+  index: number
 ) => {
-    const elementAtIndex = parent.children[index]
-    if (elementAtIndex === element) {
-        return
-    }
-    parent.insertBefore(element, elementAtIndex)
+  const elementAtIndex = parent.children[index]
+  if (elementAtIndex === element) {
+    return
+  }
+  parent.insertBefore(element, elementAtIndex)
 }
 
 export const children = (
-    ...children: Array<HTMLElement | string>
+  ...children: Array<HTMLElement | string>
 ) => (parent: HTMLElement) => {
-    parent.replaceChildren(...children)
+  parent.replaceChildren(...children)
 }
 
 export const shadow = (
-    ...children: Array<HTMLElement | string>
+  ...children: Array<HTMLElement | string>
 ) => (parent: HTMLElement) => {
-    parent.attachShadow({mode: 'open'})
-    parent.shadowRoot.replaceChildren(...children)
+  parent.attachShadow({mode: 'open'})
+  parent.shadowRoot.replaceChildren(...children)
 }
 
 /**
@@ -120,9 +127,9 @@ export const shadow = (
  * Value will be coerced to string. If nullish, will be coerced to empty string.
  */
 export const text = (
-    text: (() => any) | any
+  text: (() => any) | any
 ) => parent =>
-    effect(() => setProp(parent, 'textContent', sample(text) ?? ''))
+  effect(() => setProp(parent, 'textContent', sample(text) ?? ''))
 
 const noConfigure = (parent: HTMLElement) => {}
 
@@ -139,32 +146,32 @@ const isArray = Array.isArray
  * @returns {HTMLElement}
  */
 export const h = (
-    tag: string,
-    properties: Record<string, any> | (() => Record<string, any>),
-    configure: (
-        Array<HTMLElement | string> |
-        ((element: HTMLElement) => void)
-    ) = noConfigure
+  tag: string,
+  properties: Record<string, any> | (() => Record<string, any>),
+  configure: (
+    Array<HTMLElement | string> |
+    ((element: HTMLElement) => void)
+  ) = noConfigure
 ) => {
-    const element = document.createElement(tag)
+  const element = document.createElement(tag)
 
-    effect(() => setProps(element, sample(properties)))
+  effect(() => setProps(element, sample(properties)))
 
-    if (isArray(configure)) {
-        element.replaceChildren(...configure)
-    } else {
-        configure(element)
-    }
+  if (isArray(configure)) {
+    element.replaceChildren(...configure)
+  } else {
+    configure(element)
+  }
 
-    return element
+  return element
 }
 
 type TagFactory = (
-    properties: Record<string, any> | (() => Record<string, any>),
-    configure: (
-        Array<HTMLElement | string> |
-        ((element: HTMLElement) => void)
-    )
+  properties: Record<string, any> | (() => Record<string, any>),
+  configure?: (
+    Array<HTMLElement | string> |
+    ((element: HTMLElement) => void)
+  )
 ) => HTMLElement
 
 /**
@@ -175,10 +182,10 @@ type TagFactory = (
  * div({className: 'wrapper'})
  */
 export const tag = (tag: string): TagFactory =>
-    (properties, configure=noConfigure) => h(tag, properties, configure)
+  (properties, configure=noConfigure) => h(tag, properties, configure)
 
 /**
- * Create a tag factory function by accessing any proprty of `tags`.
+ * Create a tag factory function by accessing any property of `tags`.
  * The key will be used as the tag name for the factory.
  * Key must be a string, and will be passed verbatim as the tag name to
  * `document.createElement()` under the hood.
@@ -221,27 +228,27 @@ const LAYOUT_TRIGGERING_PROPS = new Set(['innerText'])
  * @param value - the value to set
  */
 export const setProp = (
-    element: Node,
-    key: string,
-    value: any
+  element: Node,
+  key: string,
+  value: any
 ) => {
-    if (LAYOUT_TRIGGERING_PROPS.has(key)) {
-        console.warn(`Checking property value for ${key} triggers layout. Consider writing to this property without using setProp().`)
-    }
+  if (LAYOUT_TRIGGERING_PROPS.has(key)) {
+    console.warn(`Checking property value for ${key} triggers layout. Consider writing to this property without using setProp().`)
+  }
 
-    if (element[key] !== value) {
-        element[key] = value
-    }
+  if (element[key] !== value) {
+    element[key] = value
+  }
 }
 
 /**
  * Set properties on an element, but only if the value has actually changed.
  */
 const setProps = (
-    element: Node,
-    props: Record<string, any>
+  element: Node,
+  props: Record<string, any>
 ) => {
-    for (const [key, value] of Object.entries(props)) {
-        setProp(element, key, value)
-    }
+  for (const [key, value] of Object.entries(props)) {
+    setProp(element, key, value)
+  }
 }

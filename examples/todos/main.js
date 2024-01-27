@@ -3,7 +3,7 @@ import {
   computed,
   next,
   unknown
-} from '../../spellcaster.js'
+} from '../../dist/spellcaster.js'
 
 import {
   tags,

@@ -4,15 +4,16 @@ import {
   next,
   unknown,
   Transaction
-} from '../../spellcaster.js'
+} from '../../src/spellcaster.ts'
 
 import {
   tags,
   repeat,
   text,
   cid,
-  index
-} from '../../hyperscript.js'
+  indexById,
+  Identifiable
+} from '../../src/hyperscript.js'
 
 const {div, button, input} = tags
 
@@ -54,7 +55,7 @@ const completeMsg = (id: string, isComplete: boolean): CompleteMsg => ({
 
 // Models and views
 
-type TodoModel = {
+interface TodoModel extends Identifiable {
   id: string
   isComplete: boolean
   text: string
@@ -175,14 +176,16 @@ const updateInput = (
 const submitInput = (
   state: AppModel,
   text: string
-): Transaction<AppModel, Msg> => next({
-  ...state,
-  input: InputModel({text: ''}),
-  todos: index([
-    ...state.todos.values(),
-    TodoModel({text})
-  ])
-})
+): Transaction<AppModel, Msg> => next(
+  AppModel({
+    ...state,
+    input: InputModel({text: ''}),
+    todos: indexById<string, TodoModel>([
+      ...state.todos.values(),
+      TodoModel({text})
+    ])
+  })
+)
 
 const complete = (
   state: AppModel,

@@ -3,18 +3,22 @@
  * IDs are NOT guaranteed to be stable across page refreshes.
  */
 export declare const cid: () => string;
-export interface Identifiable<Key> {
-    id: Key;
-}
-export declare const getId: <Key>(item: Identifiable<Key>) => Key;
 /** Index an iterable of items by key, returning a map. */
 export declare const index: <Key, Item>(iter: Iterable<Item>, getKey: (item: Item) => Key) => Map<Key, Item>;
-export declare const indexById: <Key>(iter: Iterable<Identifiable<Key>>) => Map<Key, Identifiable<Key>>;
+/** An item that exposes an ID field that is unique within its collection */
+export interface Identifiable {
+    id: any;
+}
+export declare const getId: <Key, Item extends Identifiable>(item: Item) => any;
+/** Index a collection by ID */
+export declare const indexById: <Key, Item extends Identifiable>(iter: Iterable<Item>) => Map<Key, Item>;
+/** A view-constructing function */
+export type View<State, Msg> = (state: () => State, send: (msg: Msg) => void) => HTMLElement;
 /**
  * Create a function to efficiently render a dynamic list of views on a
  * parent element.
  */
-export declare const repeat: <Key, State, Msg>(view: (state: () => State, send: (msg: Msg) => void) => HTMLElement, states: () => Map<Key, State>, send: (msg: Msg) => void) => (parent: HTMLElement) => void;
+export declare const repeat: <Key, State, Msg>(view: View<State, Msg>, states: () => Map<Key, State>, send: (msg: Msg) => void) => (parent: HTMLElement) => void;
 /**
  * Insert element at index.
  * If element is already at index, this function is a no-op
@@ -41,7 +45,7 @@ export declare const text: (text: (() => any) | any) => (parent: any) => void;
  * @returns {HTMLElement}
  */
 export declare const h: (tag: string, properties: Record<string, any> | (() => Record<string, any>), configure?: (string | HTMLElement)[] | ((element: HTMLElement) => void)) => HTMLElement;
-type TagFactory = (properties: Record<string, any> | (() => Record<string, any>), configure: (Array<HTMLElement | string> | ((element: HTMLElement) => void))) => HTMLElement;
+type TagFactory = (properties: Record<string, any> | (() => Record<string, any>), configure?: (Array<HTMLElement | string> | ((element: HTMLElement) => void))) => HTMLElement;
 /**
  * Create a tag factory function - a specialized version of `h()` for a
  * specific tag.
@@ -51,7 +55,7 @@ type TagFactory = (properties: Record<string, any> | (() => Record<string, any>)
  */
 export declare const tag: (tag: string) => TagFactory;
 /**
- * Create a tag factory function by accessing any proprty of `tags`.
+ * Create a tag factory function by accessing any property of `tags`.
  * The key will be used as the tag name for the factory.
  * Key must be a string, and will be passed verbatim as the tag name to
  * `document.createElement()` under the hood.

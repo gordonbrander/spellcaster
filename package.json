@@ -20,7 +20,7 @@
     }
   },
   "scripts": {
-    "prepublish": "tsc -p tsconfig.json",
+    "prepare": "tsc -p tsconfig.json",
     "test": "mocha"
   },
   "directories": {

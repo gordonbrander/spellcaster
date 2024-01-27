@@ -1,5 +1,6 @@
-import {signal} from '../../spellcaster.js'
-import {tags, text} from '../../hyperscript.js'
+import {signal} from '../../dist/spellcaster.js'
+import {tags, text} from '../../dist/hyperscript.js'
+
 const {div, button} = tags
 
 const Counter = (): HTMLElement => {

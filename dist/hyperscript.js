@@ -6,7 +6,6 @@ let _cid = 0;
  * IDs are NOT guaranteed to be stable across page refreshes.
  */
 export const cid = () => `cid${_cid++}`;
-export const getId = (item) => item.id;
 /** Index an iterable of items by key, returning a map. */
 export const index = (iter, getKey) => {
     const indexed = new Map();
@@ -15,6 +14,8 @@ export const index = (iter, getKey) => {
     }
     return indexed;
 };
+export const getId = (item) => item.id;
+/** Index a collection by ID */
 export const indexById = (iter) => index(iter, getId);
 /** Symbol for list item key */
 const __key__ = Symbol('list item key');
@@ -22,37 +23,35 @@ const __key__ = Symbol('list item key');
  * Create a function to efficiently render a dynamic list of views on a
  * parent element.
  */
-export const repeat = (view, states, send) => (parent) => {
-    effect(() => {
-        // Build an index of children and a list of children to remove.
-        // Note that we must build a list of children to remove, since
-        // removing in-place would change the live node list and bork iteration.
-        const children = new Map();
-        const removes = [];
-        for (const child of parent.children) {
-            children.set(child[__key__], child);
-            if (!states().has(child[__key__])) {
-                removes.push(child);
-            }
+export const repeat = (view, states, send) => (parent) => effect(() => {
+    // Build an index of children and a list of children to remove.
+    // Note that we must build a list of children to remove, since
+    // removing in-place would change the live node list and bork iteration.
+    const children = new Map();
+    const removes = [];
+    for (const child of parent.children) {
+        children.set(child[__key__], child);
+        if (!states().has(child[__key__])) {
+            removes.push(child);
         }
-        for (const child of removes) {
-            parent.removeChild(child);
+    }
+    for (const child of removes) {
+        parent.removeChild(child);
+    }
+    let i = 0;
+    for (const key of states().keys()) {
+        const index = i++;
+        const child = children.get(key);
+        if (child != null) {
+            insertElementAt(parent, child, index);
         }
-        let i = 0;
-        for (const key of states().keys()) {
-            const index = i++;
-            const child = children.get(key);
-            if (child != null) {
-                insertElementAt(parent, child, index);
-            }
-            else {
-                const child = view(takeValues(() => states().get(key)), send);
-                child[__key__] = key;
-                insertElementAt(parent, child, index);
-            }
+        else {
+            const child = view(takeValues(() => states().get(key)), send);
+            child[__key__] = key;
+            insertElementAt(parent, child, index);
         }
-    });
-};
+    }
+});
 /**
  * Insert element at index.
  * If element is already at index, this function is a no-op
@@ -111,7 +110,7 @@ export const h = (tag, properties, configure = noConfigure) => {
  */
 export const tag = (tag) => (properties, configure = noConfigure) => h(tag, properties, configure);
 /**
- * Create a tag factory function by accessing any proprty of `tags`.
+ * Create a tag factory function by accessing any property of `tags`.
  * The key will be used as the tag name for the factory.
  * Key must be a string, and will be passed verbatim as the tag name to
  * `document.createElement()` under the hood.

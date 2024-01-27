@@ -4,24 +4,24 @@
  * dependencies.
  */
 export const dependencyTracker = () => {
-    const scopes: Array<() => void> = []
+  const scopes: Array<() => void> = []
 
-    /** Get the current tracked scope */
-    const getTracked = (): ((() => void)|undefined) =>
-        scopes[scopes.length - 1]
+  /** Get the current tracked scope */
+  const getTracked = (): ((() => void) | undefined) =>
+    scopes[scopes.length - 1]
 
-    /** Perform a function while setting thunk as the current tracked scope */
-    const withTracking = <T>(
-        onChange: () => void,
-        perform: () => T
-    ): T => {
-        scopes.push(onChange)
-        const value = perform()
-        scopes.pop()
-        return value
-    }
+  /** Perform a function while setting thunk as the current tracked scope */
+  const withTracking = <T>(
+    onChange: () => void,
+    perform: () => T
+  ): T => {
+    scopes.push(onChange)
+    const value = perform()
+    scopes.pop()
+    return value
+  }
 
-    return {withTracking, getTracked}
+  return {withTracking, getTracked}
 }
 
 export const {withTracking, getTracked} = dependencyTracker()
@@ -31,21 +31,21 @@ export const {withTracking, getTracked} = dependencyTracker()
  * that will run only once per microtask.
  */
 export const throttled = (job: () => void): (() => void) => {
-    let isScheduled = false
+  let isScheduled = false
 
-    const perform = () => {
-        job()
-        isScheduled = false
+  const perform = () => {
+    job()
+    isScheduled = false
+  }
+
+  const schedule = () => {
+    if (!isScheduled) {
+      isScheduled = true
+      queueMicrotask(perform)
     }
+  }
 
-    const schedule = () => {
-        if (!isScheduled) {
-            isScheduled = true
-            queueMicrotask(perform)
-        }
-    }
-
-    return schedule
+  return schedule
 }
 
 /**
@@ -54,37 +54,37 @@ export const throttled = (job: () => void): (() => void) => {
  * transaction.
  */
 export const transaction = () => {
-    let transaction: Set<(() => void)> = new Set()
+  let transaction: Set<(() => void)> = new Set()
 
-    /**
-     * Add listener to current transaction.
-     * Listener functions are deduped. E.g. if you add the same listener twice to
-     * the same transaction, it's only added once.
-     */
-    const withTransaction = (listener: (() => void)|undefined) => {
-        if (typeof listener === 'function') {
-            transaction.add(listener)
-        }
+  /**
+   * Add listener to current transaction.
+   * Listener functions are deduped. E.g. if you add the same listener twice to
+   * the same transaction, it's only added once.
+   */
+  const withTransaction = (listener: (() => void)|undefined) => {
+    if (typeof listener === 'function') {
+      transaction.add(listener)
     }
+  }
 
-    /**
-     * Perform a transaction.
-     * Listeners in transaction are notified once and then forgotten.
-     */
-    const transact = () => {
-        // Capture transaction
-        const listeners = transaction
-        // Create a new transaction. This transaction will gather dependencies
-        // queued while executing listeners.
-        transaction = new Set()
-        // Perform transaction.
-        for (const listener of listeners) {
-            listener()
-        }
-        // Listeners are released after scope exits so they can be garbaged.
+  /**
+   * Perform a transaction.
+   * Listeners in transaction are notified once and then forgotten.
+   */
+  const transact = () => {
+    // Capture transaction
+    const listeners = transaction
+    // Create a new transaction. This transaction will gather dependencies
+    // queued while executing listeners.
+    transaction = new Set()
+    // Perform transaction.
+    for (const listener of listeners) {
+      listener()
     }
+    // Listeners are released after scope exits so they can be garbaged.
+  }
 
-    return {withTransaction, transact}
+  return {withTransaction, transact}
 }
 
 /**
@@ -92,11 +92,11 @@ export const transaction = () => {
  * A signal is any zero-argument function.
  */
 export const isSignal = (value: any): value is (() => any) =>
-    (typeof value === 'function' && value.length === 0)
+  (typeof value === 'function' && value.length === 0)
   
 /** Sample a value that may be a signal, or just an ordinary value */
 export const sample = <T>(value: T|(() => T)): T =>
-    isSignal(value) ? value() : value
+  isSignal(value) ? value() : value
 
 /**
  * A signal is a reactive state container. It holds a single value which is
@@ -106,34 +106,34 @@ export const sample = <T>(value: T|(() => T)): T =>
  * `effect`, the scope will automatically re-execute when the signal changes.
  */
 export const signal = <T>(initial: T): [() => T, (value: T) => void] => {
-    const didChange = transaction()
+  const didChange = transaction()
 
-    let state = initial
+  let state = initial
 
-    /**
-     * Read current signal state
-     * When read within reactive scopes, such as `computed` or `effect`,
-     * the scope will automatically re-execute when the signal changes.
-     */
-    const read = () => {
-        didChange.withTransaction(getTracked())
-        return state
+  /**
+   * Read current signal state
+   * When read within reactive scopes, such as `computed` or `effect`,
+   * the scope will automatically re-execute when the signal changes.
+   */
+  const read = () => {
+    didChange.withTransaction(getTracked())
+    return state
+  }
+
+  /**
+   * Set signal value.
+   * A value will only be set and trigger a reactive transaction if it
+   * the new value is different from the old value as determined by a
+   * strict equality check.
+   */
+  const set = (value: T) => {
+    if (state !== value) {
+      state = value
+      didChange.transact()
     }
+  }
 
-    /**
-     * Set signal value.
-     * A value will only be set and trigger a reactive transaction if it
-     * the new value is different from the old value as determined by a
-     * strict equality check.
-     */
-    const set = (value: T) => {
-        if (state !== value) {
-            state = value
-            didChange.transact()
-        }
-    }
-
-    return [read, set]
+  return [read, set]
 }
 
 /**
@@ -145,30 +145,30 @@ export const signal = <T>(initial: T): [() => T, (value: T) => void] => {
  * state changes.
  */
 export const computed = <T>(compute: () => T) => {
-    const didChange = transaction()
+  const didChange = transaction()
 
-    // We batch recomputes to solve the diamond problem.
-    // Every upstream signal read within the computed's tracking scope can
-    // independently generate a change notification. This means if two upstream
-    // signals change at once, our transaction callback gets called twice.
-    // By scheduling batch updates on the next microtask, we ensure that the
-    // computed signal is recomputed only once per event loop turn.
-    const recompute = throttled(() => {
-        const value = withTracking(recompute, compute)
-        if (state !== value) {
-            state = value
-            didChange.transact()
-        }
-    })
-
-    const read = () => {
-        didChange.withTransaction(getTracked())
-        return state
+  // We batch recomputes to solve the diamond problem.
+  // Every upstream signal read within the computed's tracking scope can
+  // independently generate a change notification. This means if two upstream
+  // signals change at once, our transaction callback gets called twice.
+  // By scheduling batch updates on the next microtask, we ensure that the
+  // computed signal is recomputed only once per event loop turn.
+  const recompute = throttled(() => {
+    const value = withTracking(recompute, compute)
+    if (state !== value) {
+      state = value
+      didChange.transact()
     }
+  })
 
-    let state = withTracking(recompute, compute)
+  const read = () => {
+    didChange.withTransaction(getTracked())
+    return state
+  }
 
-    return read
+  let state = withTracking(recompute, compute)
+
+  return read
 }
 
 /**
@@ -178,26 +178,26 @@ export const computed = <T>(compute: () => T) => {
  * state changes.
  */
 export const effect = (perform: () => void) => {
-    const performEffect = throttled(() => {
-        withTracking(performEffect, perform)
-    })
+  const performEffect = throttled(() => {
     withTracking(performEffect, perform)
+  })
+  withTracking(performEffect, perform)
 }
 
 export type Effect<Msg> = (() => Promise<Msg>)|(() => Msg)
 
 export type Transaction<State, Msg> = {
-    state: State
-    effects: Array<Effect<Msg>>
+  state: State
+  effects: Array<Effect<Msg>>
 }
 
 /** Create a transaction object for the store. */
 export const next = <State, Msg>(
-    state: State,
-    effects: Array<Effect<Msg>>=[]
+  state: State,
+  effects: Array<Effect<Msg>>=[]
 ): Transaction<State, Msg> => ({
-    state,
-    effects
+  state,
+  effects
 })
   
 /**
@@ -206,47 +206,47 @@ export const next = <State, Msg>(
  * Store is inspired by the Elm App Architecture Pattern.
  */
 export const store = <State, Msg>(
-    {
-        init,
-        update,
-        debug=false
-    }: {
-        init: () => Transaction<State, Msg>,
-        update: (state: State, msg: Msg) => Transaction<State, Msg>,
-        debug?: boolean
-    }
+  {
+    init,
+    update,
+    debug=false
+  }: {
+    init: () => Transaction<State, Msg>,
+    update: (state: State, msg: Msg) => Transaction<State, Msg>,
+    debug?: boolean
+  }
 ): [() => State, (msg: Msg) => void] => {
-    const initial = init()
+  const initial = init()
 
+  if (debug) {
+    console.debug('store.state', initial.state)
+    console.debug('store.effects', initial.effects.length)
+  }
+
+  const [state, sendState] = signal(initial.state)
+
+  /** Send a message to the store */
+  const send = (msg: Msg) => {
+    const {state: next, effects} = update(state(), msg)
     if (debug) {
-        console.debug('store.state', initial.state)
-        console.debug('store.effects', initial.effects.length)
+      console.debug('store.msg', msg)
+      console.debug('store.state', next)
+      console.debug('store.effects', effects.length)
     }
+    sendState(next)
+    runEffects(effects)
+  }
 
-    const [state, sendState] = signal(initial.state)
+  /** Run an effect */
+  const runEffect = async (effect: Effect<Msg>) => send(await effect())
 
-    /** Send a message to the store */
-    const send = (msg: Msg) => {
-        const {state: next, effects} = update(state(), msg)
-        if (debug) {
-            console.debug('store.msg', msg)
-            console.debug('store.state', next)
-            console.debug('store.effects', effects.length)
-        }
-        sendState(next)
-        runEffects(effects)
-    }
+  /** Run an array of effects concurrently */
+  const runEffects = (effects: Array<Effect<Msg>>) =>
+    effects.forEach(runEffect)
 
-    /** Run an effect */
-    const runEffect = async (effect: Effect<Msg>) => send(await effect())
+  runEffects(initial.effects)
 
-    /** Run an array of effects concurrently */
-    const runEffects = (effects: Array<Effect<Msg>>) =>
-        effects.forEach(runEffect)
-
-    runEffects(initial.effects)
-
-    return [state, send]
+  return [state, send]
 }
 
 /**
@@ -255,8 +255,8 @@ export const store = <State, Msg>(
  * anything sent to the store that you don't recognize.
  */
 export const unknown = <State, Msg>(state: State, msg: Msg) => {
-    console.warn('Unknown message type', msg)
-    return next<State, Msg>(state)
+  console.warn('Unknown message type', msg)
+  return next<State, Msg>(state)
 }
 
 /**
@@ -271,28 +271,28 @@ export const unknown = <State, Msg>(state: State, msg: Msg) => {
  * signals, allowing the child signal to be garbaged.
  */
 export const takeValues = <T>(maybeSignal: (() => T|null|undefined)) => {
-    const initial = maybeSignal()
+  const initial = maybeSignal()
 
-    if (initial == null) {
-        throw new TypeError("Signal initial value cannot be null")
+  if (initial == null) {
+    throw new TypeError("Signal initial value cannot be null")
+  }
+
+  let state = initial
+  let isComplete = false
+
+  return computed(() => {
+    if (isComplete) {
+      return state
     }
 
-    let state = initial
-    let isComplete = false
+    const next = maybeSignal()
 
-    return computed(() => {
-        if (isComplete) {
-            return state
-        }
-
-        const next = maybeSignal()
-
-        if (next != null) {
-            state = next
-            return state
-        } else {
-            isComplete = true
-            return state
-        }
-    })
+    if (next != null) {
+      state = next
+      return state
+    } else {
+      isComplete = true
+      return state
+    }
+  })
 }
