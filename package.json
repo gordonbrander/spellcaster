@@ -21,7 +21,7 @@
   },
   "scripts": {
     "prepare": "tsc -p tsconfig.json",
-    "test": "mocha"
+    "test": "tsc -p tsconfig.json && mocha"
   },
   "directories": {
     "test": "./test"
