@@ -242,10 +242,10 @@ export const store = <State, Msg>(
     const generator = effect()
     while (true) {
       const {value, done} = await generator.next(state())
-      if (done) {
-        break
-      }
       send(value)
+      if (done) {
+        return
+      }
     }
   }
 
