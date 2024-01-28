@@ -184,17 +184,17 @@ export const effect = (perform: () => void) => {
   withTracking(performEffect, perform)
 }
 
-export type Effect<Msg> = (() => Promise<Msg>)|(() => Msg)
+export type Effect<State, Msg> = () => AsyncGenerator<Msg, Msg, State>
 
 export type Transaction<State, Msg> = {
   state: State
-  effects: Array<Effect<Msg>>
+  effects: Array<Effect<State, Msg>>
 }
 
 /** Create a transaction object for the store. */
 export const next = <State, Msg>(
   state: State,
-  effects: Array<Effect<Msg>>=[]
+  effects: Array<Effect<State, Msg>>=[]
 ): Transaction<State, Msg> => ({
   state,
   effects
@@ -223,7 +223,7 @@ export const store = <State, Msg>(
     console.debug('store.effects', initial.effects.length)
   }
 
-  const [state, sendState] = signal(initial.state)
+  const [state, setState] = signal(initial.state)
 
   /** Send a message to the store */
   const send = (msg: Msg) => {
@@ -233,15 +233,24 @@ export const store = <State, Msg>(
       console.debug('store.state', next)
       console.debug('store.effects', effects.length)
     }
-    sendState(next)
+    setState(next)
     runEffects(effects)
   }
 
   /** Run an effect */
-  const runEffect = async (effect: Effect<Msg>) => send(await effect())
+  const runEffect = async (effect: Effect<State, Msg>) => {
+    const generator = effect()
+    while (true) {
+      const {value, done} = await generator.next(state())
+      if (done) {
+        break
+      }
+      send(value)
+    }
+  }
 
   /** Run an array of effects concurrently */
-  const runEffects = (effects: Array<Effect<Msg>>) =>
+  const runEffects = (effects: Array<Effect<State, Msg>>) =>
     effects.forEach(runEffect)
 
   runEffects(initial.effects)
