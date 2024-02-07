@@ -104,25 +104,26 @@ What's going on here? To make sense of this, let's rewrite this component using 
 const viewCounter = () => {
   const [count, setCount] = signal(0)
 
-  const wrapper = document.createElement('div')
-  wrapper.className = 'wrapper'
-
-  // Create counter element
   const counter = document.createElement('div')
   counter.className = 'counter'
-  wrapper.append(counter)
+
+  // Create counter text element
+  const counterText = document.createElement('div')
+  counterText.className = 'counter-text'
+  counter.append(counterText)
 
   // Create button
   const button = document.createElement('button')
   button.textContent = 'Increment'
+  button.className = 'counter-button'
   // Set count when button is clicked
   button.onclick = () => setCount(count() + 1)
-  wrapper.append(button)
+  counter.append(button)
 
   // Write text whenever signal changes
-  effect(() => counter.textContent = count())
+  effect(() => counterText.textContent = count())
 
-  return wrapper
+  return counter
 }
 ```
 
@@ -134,7 +135,7 @@ The above example uses `signal` for local component state, but you can also pass
 const Title = title => h1({className: 'title'}, text(title))
 ```
 
-Here's a more complex example, with some dynamic properties. Instead of passing `h()` a props object, we'll pass it a function that returns an object. This function is evaluated within a reactive scope, so whenever `isHidden()` changes, the props are updated.
+Here's a more complex example, with some dynamic properties. Instead of passing the tag a props object, we'll pass it a function that returns an object. This function is evaluated within a reactive scope, so whenever `isHidden()` changes, the props are updated.
 
 ```js
 const Modal = (isHidden, children) => div(
