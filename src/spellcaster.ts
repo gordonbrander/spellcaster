@@ -88,14 +88,23 @@ export const transaction = () => {
 }
 
 /**
+ * A signal is a zero-argument function that returns a value.
+ * Reactive signals created with `signal()` will cause reactive contexts
+ * to automatically re-execute when the signal changes.
+ * Constant signals can be modeled as zero-argument functions that
+ * return a constant value.
+ */
+export type Signal<T> = (() => T)
+
+/**
  * Is value a signal-like function?
  * A signal is any zero-argument function.
  */
-export const isSignal = (value: any): value is (() => any) =>
+export const isSignal = (value: any): value is Signal<any> =>
   (typeof value === 'function' && value.length === 0)
-  
+
 /** Sample a value that may be a signal, or just an ordinary value */
-export const sample = <T>(value: T|(() => T)): T =>
+export const sample = <T>(value: T|Signal<T>): T =>
   isSignal(value) ? value() : value
 
 /**
@@ -105,7 +114,7 @@ export const sample = <T>(value: T|(() => T)): T =>
  * When signal values are read within reactive scopes, such as `computed` or
  * `effect`, the scope will automatically re-execute when the signal changes.
  */
-export const signal = <T>(initial: T): [() => T, (value: T) => void] => {
+export const signal = <T>(initial: T): [Signal<T>, (value: T) => void] => {
   const didChange = transaction()
 
   let state = initial
@@ -144,7 +153,7 @@ export const signal = <T>(initial: T): [() => T, (value: T) => void] => {
  * `compute` will automatically cause `compute` to be re-run when signal
  * state changes.
  */
-export const computed = <T>(compute: () => T) => {
+export const computed = <T>(compute: Signal<T>) => {
   const didChange = transaction()
 
   // We batch recomputes to solve the diamond problem.
@@ -215,7 +224,7 @@ export const store = <State, Msg>(
     update: (state: State, msg: Msg) => Transaction<State, Msg>,
     debug?: boolean
   }
-): [() => State, (msg: Msg) => void] => {
+): [Signal<State>, (msg: Msg) => void] => {
   const initial = init()
 
   if (debug) {
@@ -270,7 +279,7 @@ export const unknown = <State, Msg>(state: State, msg: Msg) => {
  * exists. This completes the signal and breaks the connection with upstream
  * signals, allowing the child signal to be garbaged.
  */
-export const takeValues = <T>(maybeSignal: (() => T|null|undefined)) => {
+export const takeValues = <T>(maybeSignal: Signal<T|null|undefined>) => {
   const initial = maybeSignal()
 
   if (initial == null) {
