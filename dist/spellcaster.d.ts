@@ -23,12 +23,20 @@ export declare const transaction: () => {
     transact: () => void;
 };
 /**
+ * A signal is a zero-argument function that returns a value.
+ * Reactive signals created with `signal()` will cause reactive contexts
+ * to automatically re-execute when the signal changes.
+ * Constant signals can be modeled as zero-argument functions that
+ * return a constant value.
+ */
+export type Signal<T> = (() => T);
+/**
  * Is value a signal-like function?
  * A signal is any zero-argument function.
  */
-export declare const isSignal: (value: any) => value is () => any;
+export declare const isSignal: (value: any) => value is Signal<any>;
 /** Sample a value that may be a signal, or just an ordinary value */
-export declare const sample: <T>(value: T | (() => T)) => T;
+export declare const sample: <T>(value: T | Signal<T>) => T;
 /**
  * A signal is a reactive state container. It holds a single value which is
  * updated atomically.
@@ -36,7 +44,7 @@ export declare const sample: <T>(value: T | (() => T)) => T;
  * When signal values are read within reactive scopes, such as `computed` or
  * `effect`, the scope will automatically re-execute when the signal changes.
  */
-export declare const signal: <T>(initial: T) => [() => T, (value: T) => void];
+export declare const signal: <T>(initial: T) => [Signal<T>, (value: T) => void];
 /**
  * Create a computed signal
  * Computed sigal takes a zero-argument function, `compute` which may read
@@ -45,7 +53,7 @@ export declare const signal: <T>(initial: T) => [() => T, (value: T) => void];
  * `compute` will automatically cause `compute` to be re-run when signal
  * state changes.
  */
-export declare const computed: <T>(compute: () => T) => () => T;
+export declare const computed: <T>(compute: Signal<T>) => () => T;
 /**
  * Perform a side-effect whenever signals referenced within `perform` change.
  * `perform` is executed within a reactive scope, so signals referenced within
@@ -69,7 +77,7 @@ export declare const store: <State, Msg>({ init, update, debug }: {
     init: () => Transaction<State, Msg>;
     update: (state: State, msg: Msg) => Transaction<State, Msg>;
     debug?: boolean;
-}) => [() => State, (msg: Msg) => void];
+}) => [Signal<State>, (msg: Msg) => void];
 /**
  * Log an unknown message and return a no-op transaction. Useful for handling
  * the `default` arm of a switch statement in an update function to catch
@@ -87,4 +95,4 @@ export declare const unknown: <State, Msg>(state: State, msg: Msg) => Transactio
  * exists. This completes the signal and breaks the connection with upstream
  * signals, allowing the child signal to be garbaged.
  */
-export declare const takeValues: <T>(maybeSignal: () => T) => () => T;
+export declare const takeValues: <T>(maybeSignal: Signal<T>) => () => T;
