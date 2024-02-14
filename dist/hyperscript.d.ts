@@ -1,3 +1,4 @@
+import { Signal } from './spellcaster.js';
 /**
  * Get an auto-incrementing client-side ID value.
  * IDs are NOT guaranteed to be stable across page refreshes.
@@ -13,12 +14,12 @@ export declare const getId: <Key, Item extends Identifiable>(item: Item) => any;
 /** Index a collection by ID */
 export declare const indexById: <Key, Item extends Identifiable>(iter: Iterable<Item>) => Map<Key, Item>;
 /** A view-constructing function */
-export type View<State, Msg> = (state: () => State, send: (msg: Msg) => void) => HTMLElement;
+export type View<State> = (state: Signal<State>) => HTMLElement;
 /**
  * Create a function to efficiently render a dynamic list of views on a
  * parent element.
  */
-export declare const repeat: <Key, State, Msg>(view: View<State, Msg>, states: () => Map<Key, State>, send: (msg: Msg) => void) => (parent: HTMLElement) => void;
+export declare const repeat: <Key, State>(states: Signal<Map<Key, State>>, view: View<State>) => (parent: HTMLElement) => void;
 /**
  * Insert element at index.
  * If element is already at index, this function is a no-op
@@ -33,7 +34,7 @@ export declare const shadow: (...children: Array<HTMLElement | string>) => (pare
  * Write a value or signal of values to the text content of a parent element.
  * Value will be coerced to string. If nullish, will be coerced to empty string.
  */
-export declare const text: (text: (() => any) | any) => (parent: any) => void;
+export declare const text: (text: Signal<any> | any) => (parent: any) => void;
 /**
  * Signals-aware hyperscript.
  * Create an element that can be updated with signals.
@@ -44,8 +45,8 @@ export declare const text: (text: (() => any) | any) => (parent: any) => void;
  *  or an array of HTMLElements and strings to append. Optional.
  * @returns {HTMLElement}
  */
-export declare const h: (tag: string, properties: Record<string, any> | (() => Record<string, any>), configure?: (string | HTMLElement)[] | ((element: HTMLElement) => void)) => HTMLElement;
-type TagFactory = (properties: Record<string, any> | (() => Record<string, any>), configure?: (Array<HTMLElement | string> | ((element: HTMLElement) => void))) => HTMLElement;
+export declare const h: (tag: string, properties: Record<string, any> | Signal<Record<string, any>>, configure?: (string | HTMLElement)[] | ((element: HTMLElement) => void)) => HTMLElement;
+type TagFactory = (properties: Record<string, any> | Signal<Record<string, any>>, configure?: (Array<HTMLElement | string> | ((element: HTMLElement) => void))) => HTMLElement;
 /**
  * Create a tag factory function - a specialized version of `h()` for a
  * specific tag.

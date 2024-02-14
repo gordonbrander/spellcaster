@@ -1,7 +1,8 @@
 import {
   effect,
   takeValues,
-  sample
+  sample,
+  Signal
 } from './spellcaster.js'
 
 /** The counter that is incremented for `cid()` */
@@ -43,19 +44,15 @@ export const indexById = <Key, Item extends Identifiable>(
 const __key__ = Symbol('list item key')
 
 /** A view-constructing function */
-export type View<State, Msg> = (
-  state: () => State,
-  send: (msg: Msg) => void
-) => HTMLElement
+export type View<State> = (state: Signal<State>) => HTMLElement
 
 /**
  * Create a function to efficiently render a dynamic list of views on a
  * parent element.
  */
-export const repeat = <Key, State, Msg>(
-  view: View<State, Msg>,
-  states: () => Map<Key, State>,
-  send: (msg: Msg) => void
+export const repeat = <Key, State>(
+  states: Signal<Map<Key, State>>,
+  view: View<State>
 ) => (parent: HTMLElement) => effect(() => {
   // Build an index of children and a list of children to remove.
   // Note that we must build a list of children to remove, since
@@ -80,10 +77,7 @@ export const repeat = <Key, State, Msg>(
     if (child != null) {
       insertElementAt(parent, child, index)
     } else {
-      const child = view(
-        takeValues(() => states().get(key)),
-        send
-      )
+      const child = view(takeValues(() => states().get(key)))
       child[__key__] = key
       insertElementAt(parent, child, index)
     }
@@ -127,7 +121,7 @@ export const shadow = (
  * Value will be coerced to string. If nullish, will be coerced to empty string.
  */
 export const text = (
-  text: (() => any) | any
+  text: Signal<any> | any
 ) => parent =>
   effect(() => setProp(parent, 'textContent', sample(text) ?? ''))
 
@@ -147,7 +141,7 @@ const isArray = Array.isArray
  */
 export const h = (
   tag: string,
-  properties: Record<string, any> | (() => Record<string, any>),
+  properties: Record<string, any> | Signal<Record<string, any>>,
   configure: (
     Array<HTMLElement | string> |
     ((element: HTMLElement) => void)
@@ -167,7 +161,7 @@ export const h = (
 }
 
 type TagFactory = (
-  properties: Record<string, any> | (() => Record<string, any>),
+  properties: Record<string, any> | Signal<Record<string, any>>,
   configure?: (
     Array<HTMLElement | string> |
     ((element: HTMLElement) => void)
