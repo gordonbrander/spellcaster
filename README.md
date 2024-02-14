@@ -303,12 +303,12 @@ const Modal = (isHidden, children) => div(
 )
 ```
 
-What about rendering dynamic lists of children? For this, we can use `repeat(view, signal, extra)`. It takes a signal of `Map<Key, Item>`, and will efficiently re-render children, updating, moving, or removing elements as needed, making the minimal number of DOM modifications.
+What about rendering dynamic lists of children? For this, we can use `repeat(signal, view)`. It takes a signal of `Map<Key, Item>`, and will efficiently re-render children, updating, moving, or removing elements as needed, making the minimal number of DOM modifications.
 
 ```js
 const Todos = todos => div(
   {className: 'todos'},
-  repeat(Todo, todos)
+  repeat(todos, Todo)
 )
 ```
 
