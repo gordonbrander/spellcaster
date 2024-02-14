@@ -23,7 +23,7 @@ const __key__ = Symbol('list item key');
  * Create a function to efficiently render a dynamic list of views on a
  * parent element.
  */
-export const repeat = (view, states, send) => (parent) => effect(() => {
+export const repeat = (states, view) => (parent) => effect(() => {
     // Build an index of children and a list of children to remove.
     // Note that we must build a list of children to remove, since
     // removing in-place would change the live node list and bork iteration.
@@ -46,7 +46,7 @@ export const repeat = (view, states, send) => (parent) => effect(() => {
             insertElementAt(parent, child, index);
         }
         else {
-            const child = view(takeValues(() => states().get(key)), send);
+            const child = view(takeValues(() => states().get(key)));
             child[__key__] = key;
             insertElementAt(parent, child, index);
         }
