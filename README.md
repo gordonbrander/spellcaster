@@ -74,7 +74,7 @@ import {tags} from 'spellcaster/hyperscript.js'
 
 Spellcaster is also typed with TypeScript. Spellcaster exports types using the newer package.json `exports` field, so you'll want to use Typescript >= 4.7, and add the following to your `tsconfig.json`:
 
-```json
+```js
 // tsconfig.json
 "compilerOptions": {
   "moduleResolution": "node16" // or "nodenext"
