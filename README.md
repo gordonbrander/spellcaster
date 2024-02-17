@@ -62,17 +62,19 @@ Effect is where signals meet the real world. You can use `effect` like you might
 
 ## Installation
 
-Spellcaster is a vanilla JavaScript module. You can import it directly. No build step needed.
-
-```js
-// Stand-alone reactive signals library
-import * as spellcaster from 'spellcaster/spellcaster.js'
-
-// Signals-aware hyperscript library
-import {tags} from 'spellcaster/hyperscript.js'
+```
+npm install spellcaster
 ```
 
-Spellcaster is also typed with TypeScript. Spellcaster exports types using the newer package.json `exports` field, so you'll want to use Typescript >= 4.7, and add the following to your `tsconfig.json`:
+Then import into JavaScript or TypeScript files:
+
+```js
+import * as spellcaster from 'spellcaster/spellcaster.js'
+```
+
+Spellcaster is a vanilla JavaScript module, so you can also just copy the js files from `dist/` and import them directly from your HTML or JS file. No build step needed.
+
+TypeScript types are exported using the newer package.json `exports` field. To access types, you'll want to use Typescript >= 4.7, and add the following to your `tsconfig.json`:
 
 ```js
 // tsconfig.json
