@@ -10,8 +10,8 @@ import {
   repeat,
   text,
   cid,
-  index
-} from '../../hyperscript.js'
+  indexById
+} from '../../dist/hyperscript.js'
 
 const {div, button, input} = tags
 
@@ -77,19 +77,22 @@ const modelApp = ({
   todos
 })
 
-const App = (state, send) => div(
-  {className: 'app'},
-  [
-    TodoInput(
-      computed(() => state().input),
-      send
-    ),
-    div(
-      {className: 'todos'},
-      repeat(Todo, computed(() => state().todos), send)
-    )
-  ]
-)
+const App = (state, send) => {
+  const todos = computed(() => state().todos)
+  return div(
+    {className: 'app'},
+    [
+      TodoInput(
+        computed(() => state().input),
+        send
+      ),
+      div(
+        {className: 'todos'},
+        repeat(todos, todo => Todo(todo, send))
+      )
+    ]
+  )
+}
 
 const init = () => next(
   modelApp({})
@@ -116,7 +119,7 @@ const updateInput = (state, text) => next({
 const submitInput = (state, text) => next({
   ...state,
   input: modelInput({text: ''}),
-  todos: index([
+  todos: indexById([
     ...state.todos.values(),
     modelTodo({text})
   ])
