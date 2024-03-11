@@ -133,14 +133,12 @@ const App = (
   send: (msg: Msg) => void
 ): HTMLElement => {
   const todos = computed(() => state().todos)
+  const input = computed(() => state().input)
 
   return div(
     {className: 'app'},
     [
-      TodoInput(
-        computed(() => state().input),
-        send
-      ),
+      TodoInput(input, send),
       div(
         {className: 'todos'},
         repeat(todos, todo => Todo(todo, send))
