@@ -131,19 +131,23 @@ const AppModel = ({
 const App = (
   state: () => AppModel,
   send: (msg: Msg) => void
-): HTMLElement => div(
-  {className: 'app'},
-  [
-    TodoInput(
-      computed(() => state().input),
-      send
-    ),
-    div(
-      {className: 'todos'},
-      repeat(Todo, computed(() => state().todos), send)
-    )
-  ]
-)
+): HTMLElement => {
+  const todos = computed(() => state().todos)
+
+  return div(
+    {className: 'app'},
+    [
+      TodoInput(
+        computed(() => state().input),
+        send
+      ),
+      div(
+        {className: 'todos'},
+        repeat(todos, todo => Todo(todo, send))
+      )
+    ]
+  )
+}
 
 const init = (): Transaction<AppModel, Msg> => next(
   AppModel({})
