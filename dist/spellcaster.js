@@ -152,49 +152,53 @@ export const effect = (perform) => {
     });
     withTracking(performEffect, perform);
 };
-/** Create a transaction object for the store. */
-export const next = (state, effects = []) => ({
-    state,
-    effects
-});
 /**
- * Create store for state. A web app can centralize all state in a single store,
- * and use Signals to scope store state down to DOM updates.
- * Store is inspired by the Elm App Architecture Pattern.
+ * A saga that generates no side effects.
+ * This is the default root saga for stores, unless you explicitly provide one.
  */
-export const store = ({ init, update, debug = false }) => {
-    const initial = init();
-    if (debug) {
-        console.debug('store.state', initial.state);
-        console.debug('store.effects', initial.effects.length);
-    }
-    const [state, sendState] = signal(initial.state);
+export async function* noFx(state, msg) {
+    return;
+}
+/**
+ * Create store for state.
+ * You centralize all state in a single store, use signals to scope pieces of
+ * store state for views, or you can have many stores.
+ * Stores may optionally generate asynchronous side-effects in response
+ * to actions using the `fx` option, which is called with state and msg
+ * for each msg sent to store, and must return an async generator for
+ * msgs to send to the store.
+ */
+export const store = ({ init, update, fx = noFx, debug = false }) => {
+    // Live sagas
+    const sagas = new Set();
+    const [state, setState] = signal(init());
+    const runSaga = async (saga, state) => {
+        const { done, value } = await saga.next(state);
+        // Delete saga if it has completed. Ignore return value.
+        // Otherwise, if saga has yielded an action, send it to the store.
+        if (done) {
+            sagas.delete(saga);
+        }
+        else if (value != null) {
+            send(value);
+        }
+    };
     /** Send a message to the store */
     const send = (msg) => {
-        const { state: next, effects } = update(state(), msg);
+        const prev = state();
+        const next = update(prev, msg);
+        setState(next);
         if (debug) {
             console.debug('store.msg', msg);
             console.debug('store.state', next);
-            console.debug('store.effects', effects.length);
         }
-        sendState(next);
-        runEffects(effects);
+        const saga = fx(prev, msg);
+        sagas.add(saga);
+        for (const saga of sagas) {
+            runSaga(saga, next);
+        }
     };
-    /** Run an effect */
-    const runEffect = async (effect) => send(await effect());
-    /** Run an array of effects concurrently */
-    const runEffects = (effects) => effects.forEach(runEffect);
-    runEffects(initial.effects);
     return [state, send];
-};
-/**
- * Log an unknown message and return a no-op transaction. Useful for handling
- * the `default` arm of a switch statement in an update function to catch
- * anything sent to the store that you don't recognize.
- */
-export const unknown = (state, msg) => {
-    console.warn('Unknown message type', msg);
-    return next(state);
 };
 /**
  * Transform a signal, returning a computed signal that takes values until

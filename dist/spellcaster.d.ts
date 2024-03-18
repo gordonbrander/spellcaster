@@ -35,8 +35,9 @@ export type Signal<T> = (() => T);
  * A signal is any zero-argument function.
  */
 export declare const isSignal: (value: any) => value is Signal<any>;
+export type Signallike<T> = T | Signal<T>;
 /** Sample a value that may be a signal, or just an ordinary value */
-export declare const sample: <T>(value: T | Signal<T>) => T;
+export declare const sample: <T>(value: Signallike<T>) => T;
 /**
  * A signal is a reactive state container. It holds a single value which is
  * updated atomically.
@@ -61,29 +62,31 @@ export declare const computed: <T>(compute: Signal<T>) => () => T;
  * state changes.
  */
 export declare const effect: (perform: () => void) => void;
-export type Effect<Msg> = (() => Promise<Msg>) | (() => Msg);
-export type Transaction<State, Msg> = {
-    state: State;
-    effects: Array<Effect<Msg>>;
-};
-/** Create a transaction object for the store. */
-export declare const next: <State, Msg>(state: State, effects?: Effect<Msg>[]) => Transaction<State, Msg>;
 /**
- * Create store for state. A web app can centralize all state in a single store,
- * and use Signals to scope store state down to DOM updates.
- * Store is inspired by the Elm App Architecture Pattern.
+ * A saga is an async generator that yields messages and receives states.
+ * We use it to model asynchronous side effects.
  */
-export declare const store: <State, Msg>({ init, update, debug }: {
-    init: () => Transaction<State, Msg>;
-    update: (state: State, msg: Msg) => Transaction<State, Msg>;
+export type Saga<State, Msg> = AsyncGenerator<Msg, any, State>;
+/**
+ * A saga that generates no side effects.
+ * This is the default root saga for stores, unless you explicitly provide one.
+ */
+export declare function noFx<State, Msg>(state: State, msg: Msg): Saga<State, Msg>;
+/**
+ * Create store for state.
+ * You centralize all state in a single store, use signals to scope pieces of
+ * store state for views, or you can have many stores.
+ * Stores may optionally generate asynchronous side-effects in response
+ * to actions using the `fx` option, which is called with state and msg
+ * for each msg sent to store, and must return an async generator for
+ * msgs to send to the store.
+ */
+export declare const store: <State, Msg>({ init, update, fx, debug }: {
+    init: () => State;
+    update: (state: State, msg: Msg) => State;
+    fx: (state: State, msg: Msg) => Saga<State, Msg>;
     debug?: boolean;
 }) => [Signal<State>, (msg: Msg) => void];
-/**
- * Log an unknown message and return a no-op transaction. Useful for handling
- * the `default` arm of a switch statement in an update function to catch
- * anything sent to the store that you don't recognize.
- */
-export declare const unknown: <State, Msg>(state: State, msg: Msg) => Transaction<State, Msg>;
 /**
  * Transform a signal, returning a computed signal that takes values until
  * the given signal returns null. Once the given signal returns null, the

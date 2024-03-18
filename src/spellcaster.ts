@@ -103,8 +103,10 @@ export type Signal<T> = (() => T)
 export const isSignal = (value: any): value is Signal<any> =>
   (typeof value === 'function' && value.length === 0)
 
+export type Signallike<T> = T|Signal<T>
+
 /** Sample a value that may be a signal, or just an ordinary value */
-export const sample = <T>(value: T|Signal<T>): T =>
+export const sample = <T>(value: Signallike<T>): T =>
   isSignal(value) ? value() : value
 
 /**
@@ -193,79 +195,78 @@ export const effect = (perform: () => void) => {
   withTracking(performEffect, perform)
 }
 
-export type Effect<Msg> = (() => Promise<Msg>)|(() => Msg)
+/**
+ * A saga is an async generator that yields messages and receives states.
+ * We use it to model asynchronous side effects.
+ */
+export type Saga<State, Msg> = AsyncGenerator<Msg, any, State>
 
-export type Transaction<State, Msg> = {
-  state: State
-  effects: Array<Effect<Msg>>
+/**
+ * A saga that generates no side effects.
+ * This is the default root saga for stores, unless you explicitly provide one.
+ */
+export async function* noFx<State, Msg>(
+  state: State,
+  msg: Msg
+): Saga<State, Msg> {
+  return
 }
 
-/** Create a transaction object for the store. */
-export const next = <State, Msg>(
-  state: State,
-  effects: Array<Effect<Msg>>=[]
-): Transaction<State, Msg> => ({
-  state,
-  effects
-})
-  
 /**
- * Create store for state. A web app can centralize all state in a single store,
- * and use Signals to scope store state down to DOM updates.
- * Store is inspired by the Elm App Architecture Pattern.
+ * Create store for state.
+ * You centralize all state in a single store, use signals to scope pieces of
+ * store state for views, or you can have many stores.
+ * Stores may optionally generate asynchronous side-effects in response
+ * to actions using the `fx` option, which is called with state and msg
+ * for each msg sent to store, and must return an async generator for
+ * msgs to send to the store.
  */
 export const store = <State, Msg>(
   {
     init,
     update,
+    fx=noFx,
     debug=false
   }: {
-    init: () => Transaction<State, Msg>,
-    update: (state: State, msg: Msg) => Transaction<State, Msg>,
+    init: () => State,
+    update: (state: State, msg: Msg) => State,
+    fx: (state: State, msg: Msg) => Saga<State, Msg>,
     debug?: boolean
   }
 ): [Signal<State>, (msg: Msg) => void] => {
-  const initial = init()
+  // Live sagas
+  const sagas = new Set<Saga<State, Msg>>()
 
-  if (debug) {
-    console.debug('store.state', initial.state)
-    console.debug('store.effects', initial.effects.length)
+  const [state, setState] = signal(init())
+
+  const runSaga = async (saga: Saga<State, Msg>, state: State) => {
+    const {done, value} = await saga.next(state)
+    // Delete saga if it has completed. Ignore return value.
+    // Otherwise, if saga has yielded an action, send it to the store.
+    if (done) {
+      sagas.delete(saga)
+    } else if (value != null) {
+      send(value)
+    }
   }
-
-  const [state, sendState] = signal(initial.state)
 
   /** Send a message to the store */
   const send = (msg: Msg) => {
-    const {state: next, effects} = update(state(), msg)
+    const prev = state()
+    const next = update(prev, msg)
+    setState(next)
     if (debug) {
       console.debug('store.msg', msg)
       console.debug('store.state', next)
-      console.debug('store.effects', effects.length)
     }
-    sendState(next)
-    runEffects(effects)
+    const saga = fx(prev, msg)
+    sagas.add(saga)
+    for (const saga of sagas) {
+      runSaga(saga, next)
+    }
   }
 
-  /** Run an effect */
-  const runEffect = async (effect: Effect<Msg>) => send(await effect())
-
-  /** Run an array of effects concurrently */
-  const runEffects = (effects: Array<Effect<Msg>>) =>
-    effects.forEach(runEffect)
-
-  runEffects(initial.effects)
-
   return [state, send]
-}
-
-/**
- * Log an unknown message and return a no-op transaction. Useful for handling
- * the `default` arm of a switch statement in an update function to catch
- * anything sent to the store that you don't recognize.
- */
-export const unknown = <State, Msg>(state: State, msg: Msg) => {
-  console.warn('Unknown message type', msg)
-  return next<State, Msg>(state)
 }
 
 /**
