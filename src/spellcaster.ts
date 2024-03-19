@@ -195,22 +195,11 @@ export const effect = (perform: () => void) => {
   withTracking(performEffect, perform)
 }
 
-/**
- * A saga is an async generator that yields messages and receives states.
- * We use it to model asynchronous side effects.
- */
-export type Saga<State, Msg> = AsyncGenerator<Msg, any, State>
-
-/**
- * A saga that generates no side effects.
- * This is the default root saga for stores, unless you explicitly provide one.
- */
-export async function* noFx<State, Msg>(
+type Middleware<State, Msg> = (
   state: State,
-  msg: Msg
-): Saga<State, Msg> {
-  return
-}
+  msg: Msg,
+  send: (msg: Msg) => void
+) => void
 
 /**
  * Create store for state.
@@ -221,26 +210,50 @@ export async function* noFx<State, Msg>(
  * for each msg sent to store, and must return an async generator for
  * msgs to send to the store.
  */
-export const store = <State, Msg>(
-  {
-    init,
-    update,
-    fx=noFx,
-    debug=false
-  }: {
-    init: () => State,
-    update: (state: State, msg: Msg) => State,
-    fx: (state: State, msg: Msg) => Saga<State, Msg>,
-    debug?: boolean
+export const store = <State, Msg>({
+  state: initial,
+  update,
+  middleware
+}: {
+  state: State,
+  update: (state: State, msg: Msg) => State,
+  middleware: Middleware<State, Msg>
+}) => {
+  const [state, setState] = signal(initial)
+
+  const send = (msg: Msg) => setState(update(state(), msg))
+
+  const sendToStore = (msg: Msg) => {
+    middleware(state(), msg, send)
   }
-): [Signal<State>, (msg: Msg) => void] => {
+
+  return [state, sendToStore]
+}
+
+const middleware = <State, Msg>(
+  ...middlewares: Array<Middleware<State, Msg>>
+) => {
+  
+}
+
+/**
+ * A saga is an async generator that yields messages and receives states.
+ * We use it to model asynchronous side effects.
+ */
+export type Saga<Msg> = AsyncGenerator<Msg, any, Msg>
+
+const saga = <State, Msg>(
+  fx: (state: State, msg: Msg) => Saga<Msg>
+) => {
   // Live sagas
-  const sagas = new Set<Saga<State, Msg>>()
+  const sagas = new Set<Saga<Msg>>()
 
-  const [state, setState] = signal(init())
-
-  const runSaga = async (saga: Saga<State, Msg>, state: State) => {
-    const {done, value} = await saga.next(state)
+  const runSaga = async (
+    saga: Saga<Msg>,
+    msg: Msg,
+    send: (msg: Msg) => void
+  ) => {
+    const {done, value} = await saga.next(msg)
     // Delete saga if it has completed. Ignore return value.
     // Otherwise, if saga has yielded an action, send it to the store.
     if (done) {
@@ -250,23 +263,14 @@ export const store = <State, Msg>(
     }
   }
 
-  /** Send a message to the store */
-  const send = (msg: Msg) => {
-    const prev = state()
-    const next = update(prev, msg)
-    setState(next)
-    if (debug) {
-      console.debug('store.msg', msg)
-      console.debug('store.state', next)
-    }
-    const saga = fx(prev, msg)
+  return (state: State, msg: Msg, send: (msg: Msg) => void) => {
+    send(msg)
+    const saga = fx(state, msg)
     sagas.add(saga)
     for (const saga of sagas) {
-      runSaga(saga, next)
+      runSaga(saga, msg, send)
     }
   }
-
-  return [state, send]
 }
 
 /**
