@@ -195,79 +195,6 @@ export const effect = (perform: () => void) => {
   withTracking(performEffect, perform)
 }
 
-/**
- * A saga is an async generator that yields messages and receives states.
- * We use it to model asynchronous side effects.
- */
-export type Saga<State, Msg> = AsyncGenerator<Msg, any, State>
-
-/**
- * A saga that generates no side effects.
- * This is the default root saga for stores, unless you explicitly provide one.
- */
-export async function* noFx<State, Msg>(
-  state: State,
-  msg: Msg
-): Saga<State, Msg> {
-  return
-}
-
-/**
- * Create store for state.
- * You centralize all state in a single store, use signals to scope pieces of
- * store state for views, or you can have many stores.
- * Stores may optionally generate asynchronous side-effects in response
- * to actions using the `fx` option, which is called with state and msg
- * for each msg sent to store, and must return an async generator for
- * msgs to send to the store.
- */
-export const store = <State, Msg>(
-  {
-    init,
-    update,
-    fx=noFx,
-    debug=false
-  }: {
-    init: () => State,
-    update: (state: State, msg: Msg) => State,
-    fx: (state: State, msg: Msg) => Saga<State, Msg>,
-    debug?: boolean
-  }
-): [Signal<State>, (msg: Msg) => void] => {
-  // Live sagas
-  const sagas = new Set<Saga<State, Msg>>()
-
-  const [state, setState] = signal(init())
-
-  const runSaga = async (saga: Saga<State, Msg>, state: State) => {
-    const {done, value} = await saga.next(state)
-    // Delete saga if it has completed. Ignore return value.
-    // Otherwise, if saga has yielded an action, send it to the store.
-    if (done) {
-      sagas.delete(saga)
-    } else if (value != null) {
-      send(value)
-    }
-  }
-
-  /** Send a message to the store */
-  const send = (msg: Msg) => {
-    const prev = state()
-    const next = update(prev, msg)
-    setState(next)
-    if (debug) {
-      console.debug('store.msg', msg)
-      console.debug('store.state', next)
-    }
-    const saga = fx(prev, msg)
-    sagas.add(saga)
-    for (const saga of sagas) {
-      runSaga(saga, next)
-    }
-  }
-
-  return [state, send]
-}
 
 /**
  * Transform a signal, returning a computed signal that takes values until
@@ -305,4 +232,106 @@ export const takeValues = <T>(maybeSignal: Signal<T|null|undefined>) => {
       return state
     }
   })
+}
+
+/**
+ * A saga is an async generator that yields messages and receives states.
+ * We use it to model asynchronous side effects.
+ */
+export type Saga<State, Msg> = AsyncGenerator<Msg, any, State>
+
+/**
+ * A saga that generates no side effects.
+ * This is the default root saga for stores, unless you explicitly provide one.
+ */
+export async function* noFx<State, Msg>(
+  state: State,
+  msg: Msg
+): Saga<State, Msg> {
+  return
+}
+
+/** A saga that generates a single side effect using an async function */
+export const singleFx = <State, Msg>(
+  fx: (state: State, msg: Msg) => Promise<Msg>
+) => async function* (state: State, msg: Msg): Saga<State, Msg> {
+  yield await fx(state, msg)
+}
+
+/**
+ * A generator that yields undefined until state meets condition.
+ * `spinFx` is useful for suspending a saga generator until a certain state
+ * condition reached, at which point the generator can pick back up.
+ * @example
+ * yield Msg.a
+ * const state = yield* spinFx(state => state.isReady)
+ * yield Msg.b(state.api)
+ */
+export function* spinFx<State>(
+  predicate: (state: State) => boolean
+) {
+  while (true) {
+    const state = yield
+    if (predicate(state)) {
+      return state
+    }
+  }
+}
+
+/**
+ * Create a reducer-based store for state.
+ * Stores are given an initial state and an update function that takes the
+ * current state and a message, and returns a new state.
+ * 
+ * You may also provide an async generator function `fx` to a store to generate
+ * side effects. Like update, `fx` is invoked once per message, with both the
+ * current state and the message. The generator function may yield any number
+ * of messages. Each yield passes back the state that is produced as a result
+ * of the message. You can also yield undefined to suspend the generator
+ * until some other message changes the state.
+ * 
+ * Returns a two-array containing a signal for state, and a send function
+ * for messages.
+ */
+export const store = <State, Msg>(
+  {
+    state: initial,
+    update,
+    fx=noFx
+  }: {
+    state: State,
+    update: (state: State, msg: Msg) => State,
+    fx: (state: State, msg: Msg) => Saga<State, Msg>,
+    debug?: boolean
+  }
+): [Signal<State>, (msg: Msg) => void] => {
+  // Live sagas
+  const sagas = new Set<Saga<State, Msg>>()
+
+  const [state, setState] = signal(initial)
+
+  const runSaga = async (saga: Saga<State, Msg>, state: State) => {
+    const {done, value} = await saga.next(state)
+    // Delete saga if it has completed. Ignore return value.
+    // Otherwise, if saga has yielded an action, send it to the store.
+    if (done) {
+      sagas.delete(saga)
+    } else if (value != null) {
+      send(value)
+    }
+  }
+
+  /** Send a message to the store */
+  const send = (msg: Msg) => {
+    const prev = state()
+    const next = update(prev, msg)
+    setState(next)
+    const saga = fx(prev, msg)
+    sagas.add(saga)
+    for (const saga of sagas) {
+      runSaga(saga, next)
+    }
+  }
+
+  return [state, send]
 }

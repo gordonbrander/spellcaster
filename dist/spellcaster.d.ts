@@ -63,31 +63,6 @@ export declare const computed: <T>(compute: Signal<T>) => () => T;
  */
 export declare const effect: (perform: () => void) => void;
 /**
- * A saga is an async generator that yields messages and receives states.
- * We use it to model asynchronous side effects.
- */
-export type Saga<State, Msg> = AsyncGenerator<Msg, any, State>;
-/**
- * A saga that generates no side effects.
- * This is the default root saga for stores, unless you explicitly provide one.
- */
-export declare function noFx<State, Msg>(state: State, msg: Msg): Saga<State, Msg>;
-/**
- * Create store for state.
- * You centralize all state in a single store, use signals to scope pieces of
- * store state for views, or you can have many stores.
- * Stores may optionally generate asynchronous side-effects in response
- * to actions using the `fx` option, which is called with state and msg
- * for each msg sent to store, and must return an async generator for
- * msgs to send to the store.
- */
-export declare const store: <State, Msg>({ init, update, fx, debug }: {
-    init: () => State;
-    update: (state: State, msg: Msg) => State;
-    fx: (state: State, msg: Msg) => Saga<State, Msg>;
-    debug?: boolean;
-}) => [Signal<State>, (msg: Msg) => void];
-/**
  * Transform a signal, returning a computed signal that takes values until
  * the given signal returns null. Once the given signal returns null, the
  * signal is considered to be complete and no further updates will occur.
@@ -99,3 +74,46 @@ export declare const store: <State, Msg>({ init, update, fx, debug }: {
  * signals, allowing the child signal to be garbaged.
  */
 export declare const takeValues: <T>(maybeSignal: Signal<T>) => () => T;
+/**
+ * A saga is an async generator that yields messages and receives states.
+ * We use it to model asynchronous side effects.
+ */
+export type Saga<State, Msg> = AsyncGenerator<Msg, any, State>;
+/**
+ * A saga that generates no side effects.
+ * This is the default root saga for stores, unless you explicitly provide one.
+ */
+export declare function noFx<State, Msg>(state: State, msg: Msg): Saga<State, Msg>;
+/** A saga that generates a single side effect using an async function */
+export declare const singleFx: <State, Msg>(fx: (state: State, msg: Msg) => Promise<Msg>) => (state: State, msg: Msg) => Saga<State, Msg>;
+/**
+ * A generator that yields undefined until state meets condition.
+ * `spinFx` is useful for suspending a saga generator until a certain state
+ * condition reached, at which point the generator can pick back up.
+ * @example
+ * yield Msg.a
+ * const state = yield* spinFx(state => state.isReady)
+ * yield Msg.b(state.api)
+ */
+export declare function spinFx<State>(predicate: (state: State) => boolean): Generator<any, any, unknown>;
+/**
+ * Create a reducer-based store for state.
+ * Stores are given an initial state and an update function that takes the
+ * current state and a message, and returns a new state.
+ *
+ * You may also provide an async generator function `fx` to a store to generate
+ * side effects. Like update, `fx` is invoked once per message, with both the
+ * current state and the message. The generator function may yield any number
+ * of messages. Each yield passes back the state that is produced as a result
+ * of the message. You can also yield undefined to suspend the generator
+ * until some other message changes the state.
+ *
+ * Returns a two-array containing a signal for state, and a send function
+ * for messages.
+ */
+export declare const store: <State, Msg>({ state: initial, update, fx }: {
+    state: State;
+    update: (state: State, msg: Msg) => State;
+    fx: (state: State, msg: Msg) => Saga<State, Msg>;
+    debug?: boolean;
+}) => [Signal<State>, (msg: Msg) => void];
