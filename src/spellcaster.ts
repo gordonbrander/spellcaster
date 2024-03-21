@@ -195,11 +195,17 @@ export const effect = (perform: () => void) => {
   withTracking(performEffect, perform)
 }
 
-type Middleware<State, Msg> = (
+export type FxDriver<State, Msg> = (
   state: State,
   msg: Msg,
   send: (msg: Msg) => void
 ) => void
+
+export const noFx = <State, Msg>(
+  state: State,
+  msg: Msg,
+  send: (msg: Msg) => void
+) => {}
 
 /**
  * Create store for state.
@@ -213,47 +219,47 @@ type Middleware<State, Msg> = (
 export const store = <State, Msg>({
   state: initial,
   update,
-  middleware
+  fx = noFx
 }: {
   state: State,
   update: (state: State, msg: Msg) => State,
-  middleware: Middleware<State, Msg>
+  fx: FxDriver<State, Msg>
 }) => {
   const [state, setState] = signal(initial)
 
-  const send = (msg: Msg) => setState(update(state(), msg))
-
-  const sendToStore = (msg: Msg) => {
-    middleware(state(), msg, send)
+  const send = (msg: Msg) => {
+    const prev = state()
+    setState(update(prev, msg))
+    fx(prev, msg, send)
   }
 
-  return [state, sendToStore]
+  return [state, send]
 }
 
-const middleware = <State, Msg>(
-  ...middlewares: Array<Middleware<State, Msg>>
-) => {
-  
+export type Step<State, Msg> = {
+  state: State,
+  msg: Msg
 }
 
 /**
  * A saga is an async generator that yields messages and receives states.
  * We use it to model asynchronous side effects.
  */
-export type Saga<Msg> = AsyncGenerator<Msg, any, Msg>
+export type Saga<State, Msg> = AsyncGenerator<Msg, any, Step<State, Msg>>
 
-const saga = <State, Msg>(
-  fx: (state: State, msg: Msg) => Saga<Msg>
-) => {
+export const sagaFx = <State, Msg>(
+  fx: (state: State, msg: Msg) => Saga<State, Msg>
+): FxDriver<State, Msg> => {
   // Live sagas
-  const sagas = new Set<Saga<Msg>>()
+  const sagas = new Set<Saga<State, Msg>>()
 
   const runSaga = async (
-    saga: Saga<Msg>,
+    saga: Saga<State, Msg>,
+    state: State,
     msg: Msg,
     send: (msg: Msg) => void
   ) => {
-    const {done, value} = await saga.next(msg)
+    const {done, value} = await saga.next({state, msg})
     // Delete saga if it has completed. Ignore return value.
     // Otherwise, if saga has yielded an action, send it to the store.
     if (done) {
@@ -263,13 +269,44 @@ const saga = <State, Msg>(
     }
   }
 
-  return (state: State, msg: Msg, send: (msg: Msg) => void) => {
-    send(msg)
+  return (
+    state: State,
+    msg: Msg,
+    send: (msg: Msg) => void
+  ) => {
     const saga = fx(state, msg)
     sagas.add(saga)
     for (const saga of sagas) {
-      runSaga(saga, msg, send)
+      runSaga(saga, state, msg, send)
     }
+  }
+}
+
+export const debugFx = <State, Msg>({
+  name = 'store',
+  debug = false
+}: {
+  name?: string,
+  debug?: Signallike<boolean>
+}) => (
+  state: State,
+  msg: Msg,
+  send: (msg: Msg) => void
+) => {
+  if (sample(debug)) {
+    console.debug({name, msg})
+  }
+}
+
+export const fxDrivers = <State, Msg>(
+  ...fxDrivers: Array<FxDriver<State, Msg>>
+) => (
+  state: State,
+  msg: Msg,
+  send: (msg: Msg) => void
+) => {
+  for (const driver of fxDrivers) {
+    driver(state, msg, send)
   }
 }
 

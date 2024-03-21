@@ -11,6 +11,7 @@ import {
   computed,
   store,
   noFx,
+  sagaFx,
   isSignal,
   sample,
   takeValues
@@ -265,16 +266,6 @@ describe('computed', () => {
   })
 })
 
-describe('noFx', () => {
-  it('returns a generator that completes immediately', async () => {
-    const fx = noFx()
-    const {done, value} = await fx.next({})
-
-    assertEqual(value, undefined)
-    assertEqual(done, true)
-  })
-})
-
 describe('store', () => {
   it('returns a signal as the first item of the array pair', () => {
     const init = () => ({})
@@ -305,8 +296,6 @@ describe('store', () => {
     const Msg = {}
     Msg.inc = {type: 'inc'}
 
-    const init = () => ({count: 0})
-
     const update = (state, msg) => {
       switch (msg.type) {
       case 'inc':
@@ -317,7 +306,7 @@ describe('store', () => {
     }
 
     const [state, send] = store({
-      init,
+      state: {count: 0},
       update
     })
 
@@ -334,8 +323,6 @@ describe('store', () => {
     const Msg = {}
     Msg.incLater = {type: 'incLater'}
     Msg.inc = {type: 'inc'}
-
-    const init = () => ({count: 0})
 
     const update = (state, msg) => {
       switch (msg.type) {
@@ -355,7 +342,12 @@ describe('store', () => {
       }
     }
 
-    const [state, send] = store({init, update, fx})
+    const [state, send] = store({
+      state: {count: 0},
+      update,
+      fx: sagaFx(fx)
+    })
+
     send(Msg.incLater)
 
     setTimeout(
@@ -376,8 +368,6 @@ describe('store', () => {
     Msg.c = {type: 'c'}
     Msg.d = {type: 'd'}
     Msg.e = {type: 'e'}
-
-    const init = () => ''
 
     const update = (state, msg) => {
       switch (msg.type) {
@@ -418,7 +408,12 @@ describe('store', () => {
       yield Msg.e
     }
 
-    const [state, send] = store({init, update, fx})
+    const [state, send] = store({
+      state: '',
+      update,
+      fx: sagaFx(fx)
+    })
+
     send(Msg.a)
 
     await delay(TIMEOUT + 1)
@@ -434,8 +429,6 @@ describe('store', () => {
     Msg.c = {type: 'c'}
     Msg.d = {type: 'd'}
     Msg.e = {type: 'e'}
-
-    const init = () => ''
 
     const update = (state, msg) => {
       switch (msg.type) {
@@ -477,7 +470,11 @@ describe('store', () => {
       yield Msg.e
     }
 
-    const [state, send] = store({init, update, fx})
+    const [state, send] = store({
+      state: '',
+      update,
+      fx: sagaFx(fx)
+    })
     send(Msg.a)
 
     await delay(TIMEOUT + 1)

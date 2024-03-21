@@ -62,16 +62,8 @@ export declare const computed: <T>(compute: Signal<T>) => () => T;
  * state changes.
  */
 export declare const effect: (perform: () => void) => void;
-/**
- * A saga is an async generator that yields messages and receives states.
- * We use it to model asynchronous side effects.
- */
-export type Saga<State, Msg> = AsyncGenerator<Msg, any, State>;
-/**
- * A saga that generates no side effects.
- * This is the default root saga for stores, unless you explicitly provide one.
- */
-export declare function noFx<State, Msg>(state: State, msg: Msg): Saga<State, Msg>;
+export type FxDriver<State, Msg> = (state: State, msg: Msg, send: (msg: Msg) => void) => void;
+export declare const noFx: <State, Msg>(state: State, msg: Msg, send: (msg: Msg) => void) => void;
 /**
  * Create store for state.
  * You centralize all state in a single store, use signals to scope pieces of
@@ -81,12 +73,26 @@ export declare function noFx<State, Msg>(state: State, msg: Msg): Saga<State, Ms
  * for each msg sent to store, and must return an async generator for
  * msgs to send to the store.
  */
-export declare const store: <State, Msg>({ init, update, fx, debug }: {
-    init: () => State;
+export declare const store: <State, Msg>({ state: initial, update, fx }: {
+    state: State;
     update: (state: State, msg: Msg) => State;
-    fx: (state: State, msg: Msg) => Saga<State, Msg>;
-    debug?: boolean;
-}) => [Signal<State>, (msg: Msg) => void];
+    fx: FxDriver<State, Msg>;
+}) => ((msg: Msg) => void)[];
+export type Step<State, Msg> = {
+    state: State;
+    msg: Msg;
+};
+/**
+ * A saga is an async generator that yields messages and receives states.
+ * We use it to model asynchronous side effects.
+ */
+export type Saga<State, Msg> = AsyncGenerator<Msg, any, Step<State, Msg>>;
+export declare const sagaFx: <State, Msg>(fx: (state: State, msg: Msg) => Saga<State, Msg>) => FxDriver<State, Msg>;
+export declare const debugFx: <State, Msg>({ name, debug }: {
+    name?: string;
+    debug?: Signallike<boolean>;
+}) => (state: State, msg: Msg, send: (msg: Msg) => void) => void;
+export declare const fxDrivers: <State, Msg>(...fxDrivers: FxDriver<State, Msg>[]) => (state: State, msg: Msg, send: (msg: Msg) => void) => void;
 /**
  * Transform a signal, returning a computed signal that takes values until
  * the given signal returns null. Once the given signal returns null, the

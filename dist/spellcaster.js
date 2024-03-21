@@ -152,13 +152,7 @@ export const effect = (perform) => {
     });
     withTracking(performEffect, perform);
 };
-/**
- * A saga that generates no side effects.
- * This is the default root saga for stores, unless you explicitly provide one.
- */
-export async function* noFx(state, msg) {
-    return;
-}
+export const noFx = (state, msg, send) => { };
 /**
  * Create store for state.
  * You centralize all state in a single store, use signals to scope pieces of
@@ -168,12 +162,20 @@ export async function* noFx(state, msg) {
  * for each msg sent to store, and must return an async generator for
  * msgs to send to the store.
  */
-export const store = ({ init, update, fx = noFx, debug = false }) => {
+export const store = ({ state: initial, update, fx = noFx }) => {
+    const [state, setState] = signal(initial);
+    const send = (msg) => {
+        const prev = state();
+        setState(update(prev, msg));
+        fx(prev, msg, send);
+    };
+    return [state, send];
+};
+export const sagaFx = (fx) => {
     // Live sagas
     const sagas = new Set();
-    const [state, setState] = signal(init());
-    const runSaga = async (saga, state) => {
-        const { done, value } = await saga.next(state);
+    const runSaga = async (saga, state, msg, send) => {
+        const { done, value } = await saga.next({ state, msg });
         // Delete saga if it has completed. Ignore return value.
         // Otherwise, if saga has yielded an action, send it to the store.
         if (done) {
@@ -183,22 +185,23 @@ export const store = ({ init, update, fx = noFx, debug = false }) => {
             send(value);
         }
     };
-    /** Send a message to the store */
-    const send = (msg) => {
-        const prev = state();
-        const next = update(prev, msg);
-        setState(next);
-        if (debug) {
-            console.debug('store.msg', msg);
-            console.debug('store.state', next);
-        }
-        const saga = fx(prev, msg);
+    return (state, msg, send) => {
+        const saga = fx(state, msg);
         sagas.add(saga);
         for (const saga of sagas) {
-            runSaga(saga, next);
+            runSaga(saga, state, msg, send);
         }
     };
-    return [state, send];
+};
+export const debugFx = ({ name = 'store', debug = false }) => (state, msg, send) => {
+    if (sample(debug)) {
+        console.debug({ name, msg });
+    }
+};
+export const fxDrivers = (...fxDrivers) => (state, msg, send) => {
+    for (const driver of fxDrivers) {
+        driver(state, msg, send);
+    }
 };
 /**
  * Transform a signal, returning a computed signal that takes values until
