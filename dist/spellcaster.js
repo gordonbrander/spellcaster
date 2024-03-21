@@ -239,7 +239,6 @@ export const fxDrivers = (...fxDrivers) => (state, msg, send) => {
 export function* spinUntil(predicate) {
     while (true) {
         const state = yield;
-        console.log('spinUntil', state);
         if (predicate(state)) {
             return state;
         }

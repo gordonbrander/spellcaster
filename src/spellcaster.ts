@@ -347,7 +347,6 @@ export function* spinUntil<State>(
 ) {
   while (true) {
     const state = yield
-    console.log('spinUntil', state)
     if (predicate(state)) {
       return state
     }
