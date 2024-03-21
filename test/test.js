@@ -10,8 +10,8 @@ import {
   effect,
   computed,
   store,
-  noFx,
   sagaFx,
+  spinUntil,
   isSignal,
   sample,
   takeValues
@@ -316,7 +316,9 @@ describe('store', () => {
 
     assert(state().count === 1)
   })
+})
 
+describe('store sagaFx', () => {
   it('runs effects', done => {
     const TIMEOUT = 0
 
@@ -480,6 +482,67 @@ describe('store', () => {
     await delay(TIMEOUT + 1)
 
     assertEqual(state(), 'abdec')
+  })
+})
+
+describe('spinUntil', () => {
+  it('spins until it sees a specific state', async () => {
+    const TIMEOUT = 1
+
+    const Msg = {}
+    Msg.a = {type: 'a'}
+    Msg.b = {type: 'b'}
+    Msg.c = {type: 'c'}
+    Msg.d = {type: 'd'}
+    Msg.e = {type: 'e'}
+
+    const update = (state, msg) => {
+      switch (msg.type) {
+      case 'a':
+        return state + 'a'
+      case 'b':
+        return state + 'b'
+      case 'c':
+        return state + 'c'
+      case 'd':
+        return state + 'd'
+      case 'e':
+        return state + 'e'
+      default:
+        return state
+      }
+    }
+
+    async function* fx(state, msg) {
+      switch (msg.type) {
+      case 'a':
+        yield* aFx(state, msg)
+        return
+      default:
+        return
+      }
+    }
+
+    async function* aFx(state, msg) {
+      yield* spinUntil(state => state === 'ab')
+      yield Msg.c
+      yield Msg.d
+      yield Msg.e
+    }
+
+    const [state, send] = store({
+      state: '',
+      update,
+      fx: sagaFx(fx)
+    })
+
+    send(Msg.a)
+    await delay(1)
+    assertEqual(state(), 'a')
+
+    send(Msg.b)
+    await delay(1)
+    assertEqual(state(), 'abcde')
   })
 })
 

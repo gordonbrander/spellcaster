@@ -62,6 +62,18 @@ export declare const computed: <T>(compute: Signal<T>) => () => T;
  * state changes.
  */
 export declare const effect: (perform: () => void) => void;
+/**
+ * Transform a signal, returning a computed signal that takes values until
+ * the given signal returns null. Once the given signal returns null, the
+ * signal is considered to be complete and no further updates will occur.
+ *
+ * This utility is useful for signals representing a child in a dynamic
+ * collection of children, where the child may cease to exist.
+ * A computed signal looks up the child, returns null if that child no longer
+ * exists. This completes the signal and breaks the connection with upstream
+ * signals, allowing the child signal to be garbaged.
+ */
+export declare const takeValues: <T>(maybeSignal: Signal<T>) => () => T;
 export type FxDriver<State, Msg> = (state: State, msg: Msg, send: (msg: Msg) => void) => void;
 export declare const noFx: <State, Msg>(state: State, msg: Msg, send: (msg: Msg) => void) => void;
 /**
@@ -78,30 +90,15 @@ export declare const store: <State, Msg>({ state: initial, update, fx }: {
     update: (state: State, msg: Msg) => State;
     fx: FxDriver<State, Msg>;
 }) => ((msg: Msg) => void)[];
-export type Step<State, Msg> = {
-    state: State;
-    msg: Msg;
-};
 /**
  * A saga is an async generator that yields messages and receives states.
  * We use it to model asynchronous side effects.
  */
-export type Saga<State, Msg> = AsyncGenerator<Msg, any, Step<State, Msg>>;
+export type Saga<State, Msg> = AsyncGenerator<Msg, any, State>;
 export declare const sagaFx: <State, Msg>(fx: (state: State, msg: Msg) => Saga<State, Msg>) => FxDriver<State, Msg>;
 export declare const debugFx: <State, Msg>({ name, debug }: {
     name?: string;
     debug?: Signallike<boolean>;
 }) => (state: State, msg: Msg, send: (msg: Msg) => void) => void;
 export declare const fxDrivers: <State, Msg>(...fxDrivers: FxDriver<State, Msg>[]) => (state: State, msg: Msg, send: (msg: Msg) => void) => void;
-/**
- * Transform a signal, returning a computed signal that takes values until
- * the given signal returns null. Once the given signal returns null, the
- * signal is considered to be complete and no further updates will occur.
- *
- * This utility is useful for signals representing a child in a dynamic
- * collection of children, where the child may cease to exist.
- * A computed signal looks up the child, returns null if that child no longer
- * exists. This completes the signal and breaks the connection with upstream
- * signals, allowing the child signal to be garbaged.
- */
-export declare const takeValues: <T>(maybeSignal: Signal<T>) => () => T;
+export declare function spinUntil<State>(predicate: (state: State) => boolean): Generator<any, any, unknown>;

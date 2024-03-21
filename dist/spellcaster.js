@@ -152,57 +152,6 @@ export const effect = (perform) => {
     });
     withTracking(performEffect, perform);
 };
-export const noFx = (state, msg, send) => { };
-/**
- * Create store for state.
- * You centralize all state in a single store, use signals to scope pieces of
- * store state for views, or you can have many stores.
- * Stores may optionally generate asynchronous side-effects in response
- * to actions using the `fx` option, which is called with state and msg
- * for each msg sent to store, and must return an async generator for
- * msgs to send to the store.
- */
-export const store = ({ state: initial, update, fx = noFx }) => {
-    const [state, setState] = signal(initial);
-    const send = (msg) => {
-        const prev = state();
-        setState(update(prev, msg));
-        fx(prev, msg, send);
-    };
-    return [state, send];
-};
-export const sagaFx = (fx) => {
-    // Live sagas
-    const sagas = new Set();
-    const runSaga = async (saga, state, msg, send) => {
-        const { done, value } = await saga.next({ state, msg });
-        // Delete saga if it has completed. Ignore return value.
-        // Otherwise, if saga has yielded an action, send it to the store.
-        if (done) {
-            sagas.delete(saga);
-        }
-        else if (value != null) {
-            send(value);
-        }
-    };
-    return (state, msg, send) => {
-        const saga = fx(state, msg);
-        sagas.add(saga);
-        for (const saga of sagas) {
-            runSaga(saga, state, msg, send);
-        }
-    };
-};
-export const debugFx = ({ name = 'store', debug = false }) => (state, msg, send) => {
-    if (sample(debug)) {
-        console.debug({ name, msg });
-    }
-};
-export const fxDrivers = (...fxDrivers) => (state, msg, send) => {
-    for (const driver of fxDrivers) {
-        driver(state, msg, send);
-    }
-};
 /**
  * Transform a signal, returning a computed signal that takes values until
  * the given signal returns null. Once the given signal returns null, the
@@ -236,3 +185,63 @@ export const takeValues = (maybeSignal) => {
         }
     });
 };
+export const noFx = (state, msg, send) => { };
+/**
+ * Create store for state.
+ * You centralize all state in a single store, use signals to scope pieces of
+ * store state for views, or you can have many stores.
+ * Stores may optionally generate asynchronous side-effects in response
+ * to actions using the `fx` option, which is called with state and msg
+ * for each msg sent to store, and must return an async generator for
+ * msgs to send to the store.
+ */
+export const store = ({ state: initial, update, fx = noFx }) => {
+    const [state, setState] = signal(initial);
+    const send = (msg) => {
+        const next = update(state(), msg);
+        setState(next);
+        fx(next, msg, send);
+    };
+    return [state, send];
+};
+export const sagaFx = (fx) => {
+    // Live sagas
+    const sagas = new Set();
+    const advanceSaga = async (saga, state, send) => {
+        const { done, value } = await saga.next(state);
+        // Delete saga if it has completed. Ignore return value.
+        // Otherwise, if saga has yielded an action, send it to the store.
+        if (done) {
+            sagas.delete(saga);
+        }
+        else if (value != null) {
+            send(value);
+        }
+    };
+    return (state, msg, send) => {
+        const saga = fx(state, msg);
+        sagas.add(saga);
+        for (const saga of sagas) {
+            advanceSaga(saga, state, send);
+        }
+    };
+};
+export const debugFx = ({ name = 'store', debug = false }) => (state, msg, send) => {
+    if (sample(debug)) {
+        console.debug({ name, msg });
+    }
+};
+export const fxDrivers = (...fxDrivers) => (state, msg, send) => {
+    for (const driver of fxDrivers) {
+        driver(state, msg, send);
+    }
+};
+export function* spinUntil(predicate) {
+    while (true) {
+        const state = yield;
+        console.log('spinUntil', state);
+        if (predicate(state)) {
+            return state;
+        }
+    }
+}
