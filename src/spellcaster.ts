@@ -249,13 +249,6 @@ export async function* noFx<State, Msg>(
   msg: Msg
 ) {}
 
-/** A saga that generates a single side effect using an async function */
-export const singleFx = <State, Msg>(
-  fx: (state: State, msg: Msg) => Promise<Msg>
-) => async function* (state: State, msg: Msg) {
-  yield await fx(state, msg)
-}
-
 /**
  * Create a reducer-based store for state.
  * Stores are given an initial state and an update function that takes the

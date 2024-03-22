@@ -190,10 +190,6 @@ export const takeValues = (maybeSignal) => {
  * This is the default root saga for stores, unless you explicitly provide one.
  */
 export async function* noFx(state, msg) { }
-/** A saga that generates a single side effect using an async function */
-export const singleFx = (fx) => async function* (state, msg) {
-    yield await fx(state, msg);
-};
 /**
  * Create a reducer-based store for state.
  * Stores are given an initial state and an update function that takes the

@@ -84,8 +84,6 @@ export type Saga<Msg> = AsyncGenerator<Msg, any, unknown>;
  * This is the default root saga for stores, unless you explicitly provide one.
  */
 export declare function noFx<State, Msg>(state: State, msg: Msg): AsyncGenerator<never, void, unknown>;
-/** A saga that generates a single side effect using an async function */
-export declare const singleFx: <State, Msg>(fx: (state: State, msg: Msg) => Promise<Msg>) => (state: State, msg: Msg) => AsyncGenerator<Awaited<Msg>, void, unknown>;
 /**
  * Create a reducer-based store for state.
  * Stores are given an initial state and an update function that takes the

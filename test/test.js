@@ -13,8 +13,7 @@ import {
   noFx,
   isSignal,
   sample,
-  takeValues,
-  singleFx
+  takeValues
 } from "../dist/spellcaster.js"
 
 const delay = (ms, value) => new Promise(resolve => {
@@ -273,23 +272,6 @@ describe('noFx', () => {
 
     assertEqual(value, undefined)
     assertEqual(done, true)
-  })
-})
-
-describe('singleFx', () => {
-  it('returns a generator that yields the result of the async function', async () => {
-    const fxDriver = singleFx(async () => 'hello world')
-    const fx = fxDriver()
-    {
-      const {done, value} = await fx.next()
-      assertEqual(value, 'hello world')
-      assertEqual(done, false)
-    }
-    {
-      const {done, value} = await fx.next()
-      assertEqual(value, undefined)
-      assertEqual(done, true)
-    }
   })
 })
 
