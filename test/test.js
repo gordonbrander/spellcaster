@@ -13,7 +13,8 @@ import {
   noFx,
   isSignal,
   sample,
-  takeValues
+  takeValues,
+  singleFx
 } from "../dist/spellcaster.js"
 
 const delay = (ms, value) => new Promise(resolve => {
@@ -275,6 +276,23 @@ describe('noFx', () => {
   })
 })
 
+describe('singleFx', () => {
+  it('returns a generator that yields the result of the async function', async () => {
+    const fxDriver = singleFx(async () => 'hello world')
+    const fx = fxDriver()
+    {
+      const {done, value} = await fx.next()
+      assertEqual(value, 'hello world')
+      assertEqual(done, false)
+    }
+    {
+      const {done, value} = await fx.next()
+      assertEqual(value, undefined)
+      assertEqual(done, true)
+    }
+  })
+})
+
 describe('store', () => {
   it('returns a signal as the first item of the array pair', () => {
     const update = (state, msg) => state
@@ -364,128 +382,6 @@ describe('store', () => {
       },
       TIMEOUT + 1
     )
-  })
-
-  it('runs effects in correct order', async () => {
-    const TIMEOUT = 0
-
-    const Msg = {}
-    Msg.a = {type: 'a'}
-    Msg.b = {type: 'b'}
-    Msg.c = {type: 'c'}
-    Msg.d = {type: 'd'}
-    Msg.e = {type: 'e'}
-
-    const update = (state, msg) => {
-      switch (msg.type) {
-      case 'a':
-        return state + 'a'
-      case 'b':
-        return state + 'b'
-      case 'c':
-        return state + 'c'
-      case 'd':
-        return state + 'd'
-      case 'e':
-        return state + 'e'
-      default:
-        return state
-      }
-    }
-
-    async function* fx(state, msg) {
-      switch (msg.type) {
-      case 'a':
-        yield* aFx(state, msg)
-        return
-      case 'b':
-        yield* bFx(state, msg)
-      default:
-        return
-      }
-    }
-
-    async function* aFx(state, msg) {
-      yield Msg.b
-      yield Msg.c
-    }
-
-    async function* bFx(state, msg) {
-      yield Msg.d
-      yield Msg.e
-    }
-
-    const [state, send] = store({
-      state: '',
-      update,
-      fx
-    })
-    send(Msg.a)
-
-    await delay(TIMEOUT + 1)
-    assertEqual(state(), 'abcde')
-  })
-
-  it('runs effects in correct order (2)', async () => {
-    const TIMEOUT = 1
-
-    const Msg = {}
-    Msg.a = {type: 'a'}
-    Msg.b = {type: 'b'}
-    Msg.c = {type: 'c'}
-    Msg.d = {type: 'd'}
-    Msg.e = {type: 'e'}
-
-    const update = (state, msg) => {
-      switch (msg.type) {
-      case 'a':
-        return state + 'a'
-      case 'b':
-        return state + 'b'
-      case 'c':
-        return state + 'c'
-      case 'd':
-        return state + 'd'
-      case 'e':
-        return state + 'e'
-      default:
-        return state
-      }
-    }
-
-    async function* fx(state, msg) {
-      switch (msg.type) {
-      case 'a':
-        yield* aFx(state, msg)
-        return
-      case 'b':
-        yield* bFx(state, msg)
-      default:
-        return
-      }
-    }
-
-    async function* aFx(state, msg) {
-      yield Msg.b
-      await delay(TIMEOUT)
-      yield Msg.c
-    }
-
-    async function* bFx(state, msg) {
-      yield Msg.d
-      yield Msg.e
-    }
-
-    const [state, send] = store({
-      state: '',
-      update,
-      fx
-    })
-    send(Msg.a)
-
-    await delay(TIMEOUT + 1)
-
-    assertEqual(state(), 'abdec')
   })
 })
 
