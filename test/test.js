@@ -9,12 +9,19 @@ import {
   signal,
   effect,
   computed,
-  next,
   store,
+  noFx,
   isSignal,
   sample,
   takeValues
 } from "../dist/spellcaster.js"
+
+const delay = (ms, value) => new Promise(resolve => {
+  setTimeout(
+    () => resolve(value),
+    ms
+  )
+})
 
 describe('withTracking', () => {
   it('executes the body function immediately and returns the value', () => {
@@ -258,33 +265,35 @@ describe('computed', () => {
   })
 })
 
-describe('next', () => {
-  it('returns a transaction object', () => {
-    const fx = () => {}
-    const transaction = next(0, [fx])
+describe('noFx', () => {
+  it('returns a generator that completes immediately', async () => {
+    const fx = noFx()
+    const {done, value} = await fx.next({})
 
-    assert(typeof transaction === 'object')
-    assert(transaction.state === 0)
-    assert(transaction.effects.length === 1)
-    assert(transaction.effects[0] === fx)
+    assertEqual(value, undefined)
+    assertEqual(done, true)
   })
 })
 
 describe('store', () => {
   it('returns a signal as the first item of the array pair', () => {
-    const init = () => next({})
-    const update = (state, msg) => next({})
+    const update = (state, msg) => state
 
-    const [state, send] = store({init, update})
+    const [state, send] = store({
+      state: {},
+      update
+    })
 
     assert(isSignal(state))
   })
 
   it('returns a send function as the second item of the array pair', () => {
-    const init = () => next({})
-    const update = (state, msg) => next({})
+    const update = (state, msg) => state
 
-    const [state, send] = store({init, update})
+    const [state, send] = store({
+      state: {},
+      update
+    })
 
     assertEqual(typeof send, 'function')
     assertEqual(send.length, 1)
@@ -294,18 +303,19 @@ describe('store', () => {
     const Msg = {}
     Msg.inc = {type: 'inc'}
 
-    const init = () => next({count: 0})
-
     const update = (state, msg) => {
       switch (msg.type) {
       case 'inc':
-        return next({...state, count: state.count + 1})
+        return {...state, count: state.count + 1}
       default:
-        return next(state)
+        return state
       }
     }
 
-    const [state, send] = store({init, update})
+    const [state, send] = store({
+      state: {count: 0},
+      update
+    })
 
     assert(state().count === 0)
 
@@ -321,61 +331,30 @@ describe('store', () => {
     Msg.incLater = {type: 'incLater'}
     Msg.inc = {type: 'inc'}
 
-    const delay = (value, ms) => new Promise(resolve => {
-      setTimeout(
-        () => resolve(value),
-        ms
-      )
+    const update = (state, msg) => {
+      switch (msg.type) {
+      case 'inc':
+        return {...state, count: state.count + 1}
+      default:
+        return state
+      }
+    }
+
+    async function* fx(state, msg) {
+      switch (msg.type) {
+        case 'incLater':
+          yield await delay(TIMEOUT, Msg.inc)
+        default:
+          return
+      }
+    }
+
+    const [state, send] = store({
+      state: {count: 0},
+      update,
+      fx
     })
 
-    const init = () => next({count: 0})
-
-    const update = (state, msg) => {
-      switch (msg.type) {
-      case 'incLater':
-        const fx = () => delay(Msg.inc, TIMEOUT)
-        return next(state, [fx])
-      case 'inc':
-        return next({...state, count: state.count + 1})
-      default:
-        return next(state)
-      }
-    }
-
-    const [state, send] = store({init, update})
-    send(Msg.incLater)
-
-    setTimeout(
-      () => {
-        assertEqual(state().count, 1)
-        done()
-      },
-      TIMEOUT + 1
-    )
-  })
-
-  it('runs effects that immediately return a value', done => {
-    const TIMEOUT = 0
-
-    const Msg = {}
-    Msg.incLater = {type: 'incLater'}
-    Msg.inc = {type: 'inc'}
-
-    const init = () => next({count: 0})
-
-    const update = (state, msg) => {
-      switch (msg.type) {
-      case 'incLater':
-        const fx = () => Msg.inc
-        return next(state, [fx])
-      case 'inc':
-        return next({...state, count: state.count + 1})
-      default:
-        return next(state)
-      }
-    }
-
-    const [state, send] = store({init, update})
     send(Msg.incLater)
 
     setTimeout(

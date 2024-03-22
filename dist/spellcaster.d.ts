@@ -35,8 +35,9 @@ export type Signal<T> = (() => T);
  * A signal is any zero-argument function.
  */
 export declare const isSignal: (value: any) => value is Signal<any>;
+export type Signallike<T> = T | Signal<T>;
 /** Sample a value that may be a signal, or just an ordinary value */
-export declare const sample: <T>(value: T | Signal<T>) => T;
+export declare const sample: <T>(value: Signallike<T>) => T;
 /**
  * A signal is a reactive state container. It holds a single value which is
  * updated atomically.
@@ -61,29 +62,6 @@ export declare const computed: <T>(compute: Signal<T>) => () => T;
  * state changes.
  */
 export declare const effect: (perform: () => void) => void;
-export type Effect<Msg> = (() => Promise<Msg>) | (() => Msg);
-export type Transaction<State, Msg> = {
-    state: State;
-    effects: Array<Effect<Msg>>;
-};
-/** Create a transaction object for the store. */
-export declare const next: <State, Msg>(state: State, effects?: Effect<Msg>[]) => Transaction<State, Msg>;
-/**
- * Create store for state. A web app can centralize all state in a single store,
- * and use Signals to scope store state down to DOM updates.
- * Store is inspired by the Elm App Architecture Pattern.
- */
-export declare const store: <State, Msg>({ init, update, debug }: {
-    init: () => Transaction<State, Msg>;
-    update: (state: State, msg: Msg) => Transaction<State, Msg>;
-    debug?: boolean;
-}) => [Signal<State>, (msg: Msg) => void];
-/**
- * Log an unknown message and return a no-op transaction. Useful for handling
- * the `default` arm of a switch statement in an update function to catch
- * anything sent to the store that you don't recognize.
- */
-export declare const unknown: <State, Msg>(state: State, msg: Msg) => Transaction<State, Msg>;
 /**
  * Transform a signal, returning a computed signal that takes values until
  * the given signal returns null. Once the given signal returns null, the
@@ -96,3 +74,32 @@ export declare const unknown: <State, Msg>(state: State, msg: Msg) => Transactio
  * signals, allowing the child signal to be garbaged.
  */
 export declare const takeValues: <T>(maybeSignal: Signal<T>) => () => T;
+/**
+ * A saga is an async generator that yields messages and receives states.
+ * We use it to model asynchronous side effects.
+ */
+export type Saga<Msg> = AsyncGenerator<Msg, any, unknown>;
+/**
+ * A saga that generates no side effects.
+ * This is the default root saga for stores, unless you explicitly provide one.
+ */
+export declare function noFx<State, Msg>(state: State, msg: Msg): AsyncGenerator<never, void, unknown>;
+/**
+ * Create a reducer-based store for state.
+ * Stores are given an initial state and an update function that takes the
+ * current state and a message, and returns a new state.
+ *
+ * You may also provide an async generator function `fx` to a store to generate
+ * side effects. Like update, `fx` is invoked once per message, with both the
+ * current state (before change) and the message. The generator function may
+ * yield any number of messages, which are sent to the store.
+ *
+ * Returns a two-array containing a signal for state, and a send function
+ * for messages.
+ */
+export declare const store: <State, Msg>({ state: initial, update, fx }: {
+    state: State;
+    update: (state: State, msg: Msg) => State;
+    fx: (state: State, msg: Msg) => Saga<Msg>;
+    debug?: boolean;
+}) => [Signal<State>, (msg: Msg) => void];

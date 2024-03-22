@@ -103,8 +103,10 @@ export type Signal<T> = (() => T)
 export const isSignal = (value: any): value is Signal<any> =>
   (typeof value === 'function' && value.length === 0)
 
+export type Signallike<T> = T|Signal<T>
+
 /** Sample a value that may be a signal, or just an ordinary value */
-export const sample = <T>(value: T|Signal<T>): T =>
+export const sample = <T>(value: Signallike<T>): T =>
   isSignal(value) ? value() : value
 
 /**
@@ -193,80 +195,6 @@ export const effect = (perform: () => void) => {
   withTracking(performEffect, perform)
 }
 
-export type Effect<Msg> = (() => Promise<Msg>)|(() => Msg)
-
-export type Transaction<State, Msg> = {
-  state: State
-  effects: Array<Effect<Msg>>
-}
-
-/** Create a transaction object for the store. */
-export const next = <State, Msg>(
-  state: State,
-  effects: Array<Effect<Msg>>=[]
-): Transaction<State, Msg> => ({
-  state,
-  effects
-})
-  
-/**
- * Create store for state. A web app can centralize all state in a single store,
- * and use Signals to scope store state down to DOM updates.
- * Store is inspired by the Elm App Architecture Pattern.
- */
-export const store = <State, Msg>(
-  {
-    init,
-    update,
-    debug=false
-  }: {
-    init: () => Transaction<State, Msg>,
-    update: (state: State, msg: Msg) => Transaction<State, Msg>,
-    debug?: boolean
-  }
-): [Signal<State>, (msg: Msg) => void] => {
-  const initial = init()
-
-  if (debug) {
-    console.debug('store.state', initial.state)
-    console.debug('store.effects', initial.effects.length)
-  }
-
-  const [state, sendState] = signal(initial.state)
-
-  /** Send a message to the store */
-  const send = (msg: Msg) => {
-    const {state: next, effects} = update(state(), msg)
-    if (debug) {
-      console.debug('store.msg', msg)
-      console.debug('store.state', next)
-      console.debug('store.effects', effects.length)
-    }
-    sendState(next)
-    runEffects(effects)
-  }
-
-  /** Run an effect */
-  const runEffect = async (effect: Effect<Msg>) => send(await effect())
-
-  /** Run an array of effects concurrently */
-  const runEffects = (effects: Array<Effect<Msg>>) =>
-    effects.forEach(runEffect)
-
-  runEffects(initial.effects)
-
-  return [state, send]
-}
-
-/**
- * Log an unknown message and return a no-op transaction. Useful for handling
- * the `default` arm of a switch statement in an update function to catch
- * anything sent to the store that you don't recognize.
- */
-export const unknown = <State, Msg>(state: State, msg: Msg) => {
-  console.warn('Unknown message type', msg)
-  return next<State, Msg>(state)
-}
 
 /**
  * Transform a signal, returning a computed signal that takes values until
@@ -304,4 +232,72 @@ export const takeValues = <T>(maybeSignal: Signal<T|null|undefined>) => {
       return state
     }
   })
+}
+
+/**
+ * A saga is an async generator that yields messages and receives states.
+ * We use it to model asynchronous side effects.
+ */
+export type Saga<Msg> = AsyncGenerator<Msg, any, unknown>
+
+/**
+ * A saga that generates no side effects.
+ * This is the default root saga for stores, unless you explicitly provide one.
+ */
+export async function* noFx<State, Msg>(
+  state: State,
+  msg: Msg
+) {}
+
+/**
+ * Create a reducer-based store for state.
+ * Stores are given an initial state and an update function that takes the
+ * current state and a message, and returns a new state.
+ * 
+ * You may also provide an async generator function `fx` to a store to generate
+ * side effects. Like update, `fx` is invoked once per message, with both the
+ * current state (before change) and the message. The generator function may
+ * yield any number of messages, which are sent to the store.
+ * 
+ * Returns a two-array containing a signal for state, and a send function
+ * for messages.
+ */
+export const store = <State, Msg>(
+  {
+    state: initial,
+    update,
+    fx=noFx
+  }: {
+    state: State,
+    update: (state: State, msg: Msg) => State,
+    fx: (state: State, msg: Msg) => Saga<Msg>,
+    debug?: boolean
+  }
+): [Signal<State>, (msg: Msg) => void] => {
+  const [state, setState] = signal(initial)
+
+  const runSaga = async (
+    saga: Saga<Msg>,
+    state: State,
+    msg: Msg
+  ) => {
+    while (true) {
+      const {done, value} = await saga.next()
+      if (done) {
+        return
+      }
+      send(value)
+    }
+  }
+
+  /** Send a message to the store */
+  const send = (msg: Msg) => {
+    const prev = state()
+    const saga = fx(prev, msg)
+    const next = update(prev, msg)
+    setState(next)
+    runSaga(saga, prev, msg)
+  }
+
+  return [state, send]
 }
