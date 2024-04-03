@@ -193,81 +193,6 @@ export const effect = (perform: () => void) => {
   withTracking(performEffect, perform)
 }
 
-export type Effect<Msg> = (() => Promise<Msg>)|(() => Msg)
-
-export type Transaction<State, Msg> = {
-  state: State
-  effects: Array<Effect<Msg>>
-}
-
-/** Create a transaction object for the store. */
-export const next = <State, Msg>(
-  state: State,
-  effects: Array<Effect<Msg>>=[]
-): Transaction<State, Msg> => ({
-  state,
-  effects
-})
-  
-/**
- * Create store for state. A web app can centralize all state in a single store,
- * and use Signals to scope store state down to DOM updates.
- * Store is inspired by the Elm App Architecture Pattern.
- */
-export const store = <State, Msg>(
-  {
-    init,
-    update,
-    debug=false
-  }: {
-    init: () => Transaction<State, Msg>,
-    update: (state: State, msg: Msg) => Transaction<State, Msg>,
-    debug?: boolean
-  }
-): [Signal<State>, (msg: Msg) => void] => {
-  const initial = init()
-
-  if (debug) {
-    console.debug('store.state', initial.state)
-    console.debug('store.effects', initial.effects.length)
-  }
-
-  const [state, sendState] = signal(initial.state)
-
-  /** Send a message to the store */
-  const send = (msg: Msg) => {
-    const {state: next, effects} = update(state(), msg)
-    if (debug) {
-      console.debug('store.msg', msg)
-      console.debug('store.state', next)
-      console.debug('store.effects', effects.length)
-    }
-    sendState(next)
-    runEffects(effects)
-  }
-
-  /** Run an effect */
-  const runEffect = async (effect: Effect<Msg>) => send(await effect())
-
-  /** Run an array of effects concurrently */
-  const runEffects = (effects: Array<Effect<Msg>>) =>
-    effects.forEach(runEffect)
-
-  runEffects(initial.effects)
-
-  return [state, send]
-}
-
-/**
- * Log an unknown message and return a no-op transaction. Useful for handling
- * the `default` arm of a switch statement in an update function to catch
- * anything sent to the store that you don't recognize.
- */
-export const unknown = <State, Msg>(state: State, msg: Msg) => {
-  console.warn('Unknown message type', msg)
-  return next<State, Msg>(state)
-}
-
 /**
  * Transform a signal, returning a computed signal that takes values until
  * the given signal returns null. Once the given signal returns null, the
@@ -305,3 +230,101 @@ export const takeValues = <T>(maybeSignal: Signal<T|null|undefined>) => {
     }
   })
 }
+
+/** The ID function */
+export const id = (x: any) => x
+
+export type FxDriver<Msg> = (send: (msg: Msg) => void) => (msg: Msg) => void
+
+/**
+ * Create reducer-style store for state.
+ * 
+ * Returns a pair of state signal and send function.
+ * The send function receives messages, passing them to the `update` function
+ * which returns the new state.
+ * 
+ * An optional `msg` parameter allows you to send an initial message to the
+ * store.
+ * 
+ * Side-effects can be provided by an fx driver that decorates the send
+ * function. See `fx()` below for a default effects driver that models effects
+ * as async thunks.
+ * 
+ * Store is inspired by Redux and the Elm App Architecture Pattern.
+ * You can centralize all state in a single store, and use signals to scope
+ * down store state, or you can use multiple stores.
+ */
+export const store = <State, Msg>(
+  {
+    state: initial,
+    update,
+    msg=undefined,
+    fx=id,
+  }: {
+    state: State,
+    update: (state: State, msg: Msg) => State,
+    msg?: Msg,
+    fx: FxDriver<Msg>
+  }
+): [Signal<State>, (msg: Msg) => void] => {
+  const [state, setState] = signal(initial)
+
+  /** Send a message to the store */
+  const send = (msg: Msg) => setState(update(state(), msg))
+  /** Decorated send function with fx driver */
+  const sendWithFx = fx(send)
+
+  if (msg) {
+    sendWithFx(msg)
+  }
+
+  return [state, sendWithFx]
+}
+
+export type Effect<Msg> = (() => Promise<Msg>)|(() => Msg)
+
+/**
+ * Create a standard fx plugin for a store.
+ * Effects are modeled as zero-argument
+ */
+export const asyncFx = <Msg>(
+  generateFx: (msg: Msg) => Iterable<Effect<Msg>>
+) => (send: (msg: Msg) => void) => {
+  const forkFx = async (fx: Effect<Msg>) => sendWithFx(await fx())
+
+  const forkAllFx = (effects: Iterable<Effect<Msg>>) => {
+    for (const fx of effects) {
+      forkFx(fx)
+    }
+  }
+
+  const sendWithFx = (msg: Msg) => {
+    send(msg)
+    forkAllFx(generateFx(msg))
+  }
+
+  return sendWithFx
+}
+
+/**
+ * Create a logging effect for a store.
+ * 
+ */
+export const logFx = ({
+  name ="store",
+  debug = true
+}: {
+  name?: string,
+  debug?: (boolean|Signal<boolean>)
+}) => <Msg>(send: (msg: Msg) => void) => (msg: Msg) => {
+  if (sample(debug)) {
+    console.log(name, msg)
+  }
+  send(msg)
+}
+
+const applyTo = (value: any, fn: (value: any) => any) => fn(value)
+
+export const composeFx = <Msg>(
+  ...drivers: Array<FxDriver<Msg>>
+): FxDriver<Msg> => drivers.reduce(applyTo, id)

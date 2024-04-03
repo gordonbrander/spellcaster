@@ -152,50 +152,6 @@ export const effect = (perform) => {
     });
     withTracking(performEffect, perform);
 };
-/** Create a transaction object for the store. */
-export const next = (state, effects = []) => ({
-    state,
-    effects
-});
-/**
- * Create store for state. A web app can centralize all state in a single store,
- * and use Signals to scope store state down to DOM updates.
- * Store is inspired by the Elm App Architecture Pattern.
- */
-export const store = ({ init, update, debug = false }) => {
-    const initial = init();
-    if (debug) {
-        console.debug('store.state', initial.state);
-        console.debug('store.effects', initial.effects.length);
-    }
-    const [state, sendState] = signal(initial.state);
-    /** Send a message to the store */
-    const send = (msg) => {
-        const { state: next, effects } = update(state(), msg);
-        if (debug) {
-            console.debug('store.msg', msg);
-            console.debug('store.state', next);
-            console.debug('store.effects', effects.length);
-        }
-        sendState(next);
-        runEffects(effects);
-    };
-    /** Run an effect */
-    const runEffect = async (effect) => send(await effect());
-    /** Run an array of effects concurrently */
-    const runEffects = (effects) => effects.forEach(runEffect);
-    runEffects(initial.effects);
-    return [state, send];
-};
-/**
- * Log an unknown message and return a no-op transaction. Useful for handling
- * the `default` arm of a switch statement in an update function to catch
- * anything sent to the store that you don't recognize.
- */
-export const unknown = (state, msg) => {
-    console.warn('Unknown message type', msg);
-    return next(state);
-};
 /**
  * Transform a signal, returning a computed signal that takes values until
  * the given signal returns null. Once the given signal returns null, the
@@ -229,3 +185,63 @@ export const takeValues = (maybeSignal) => {
         }
     });
 };
+/** The ID function */
+export const id = (x) => x;
+/**
+ * Create reducer-style store for state.
+ *
+ * Returns a pair of state signal and send function.
+ * The send function receives messages, passing them to the `update` function
+ * which returns the new state.
+ *
+ * An optional `msg` parameter allows you to send an initial message to the
+ * store.
+ *
+ * Side-effects can be provided by an fx driver that decorates the send
+ * function. See `fx()` below for a default effects driver that models effects
+ * as async thunks.
+ *
+ * Store is inspired by Redux and the Elm App Architecture Pattern.
+ * You can centralize all state in a single store, and use signals to scope
+ * down store state, or you can use multiple stores.
+ */
+export const store = ({ state: initial, update, msg = undefined, fx = id, }) => {
+    const [state, setState] = signal(initial);
+    /** Send a message to the store */
+    const send = (msg) => setState(update(state(), msg));
+    /** Decorated send function with fx driver */
+    const sendWithFx = fx(send);
+    if (msg) {
+        sendWithFx(msg);
+    }
+    return [state, sendWithFx];
+};
+/**
+ * Create a standard fx plugin for a store.
+ * Effects are modeled as zero-argument
+ */
+export const asyncFx = (generateFx) => (send) => {
+    const forkFx = async (fx) => sendWithFx(await fx());
+    const forkAllFx = (effects) => {
+        for (const fx of effects) {
+            forkFx(fx);
+        }
+    };
+    const sendWithFx = (msg) => {
+        send(msg);
+        forkAllFx(generateFx(msg));
+    };
+    return sendWithFx;
+};
+/**
+ * Create a logging effect for a store.
+ *
+ */
+export const logFx = ({ name = "store", debug = true }) => (send) => (msg) => {
+    if (sample(debug)) {
+        console.log(name, msg);
+    }
+    send(msg);
+};
+const applyTo = (value, fn) => fn(value);
+export const composeFx = (...drivers) => drivers.reduce(applyTo, id);

@@ -61,29 +61,6 @@ export declare const computed: <T>(compute: Signal<T>) => () => T;
  * state changes.
  */
 export declare const effect: (perform: () => void) => void;
-export type Effect<Msg> = (() => Promise<Msg>) | (() => Msg);
-export type Transaction<State, Msg> = {
-    state: State;
-    effects: Array<Effect<Msg>>;
-};
-/** Create a transaction object for the store. */
-export declare const next: <State, Msg>(state: State, effects?: Effect<Msg>[]) => Transaction<State, Msg>;
-/**
- * Create store for state. A web app can centralize all state in a single store,
- * and use Signals to scope store state down to DOM updates.
- * Store is inspired by the Elm App Architecture Pattern.
- */
-export declare const store: <State, Msg>({ init, update, debug }: {
-    init: () => Transaction<State, Msg>;
-    update: (state: State, msg: Msg) => Transaction<State, Msg>;
-    debug?: boolean;
-}) => [Signal<State>, (msg: Msg) => void];
-/**
- * Log an unknown message and return a no-op transaction. Useful for handling
- * the `default` arm of a switch statement in an update function to catch
- * anything sent to the store that you don't recognize.
- */
-export declare const unknown: <State, Msg>(state: State, msg: Msg) => Transaction<State, Msg>;
 /**
  * Transform a signal, returning a computed signal that takes values until
  * the given signal returns null. Once the given signal returns null, the
@@ -96,3 +73,45 @@ export declare const unknown: <State, Msg>(state: State, msg: Msg) => Transactio
  * signals, allowing the child signal to be garbaged.
  */
 export declare const takeValues: <T>(maybeSignal: Signal<T>) => () => T;
+/** The ID function */
+export declare const id: (x: any) => any;
+export type FxDriver<Msg> = (send: (msg: Msg) => void) => (msg: Msg) => void;
+/**
+ * Create reducer-style store for state.
+ *
+ * Returns a pair of state signal and send function.
+ * The send function receives messages, passing them to the `update` function
+ * which returns the new state.
+ *
+ * An optional `msg` parameter allows you to send an initial message to the
+ * store.
+ *
+ * Side-effects can be provided by an fx driver that decorates the send
+ * function. See `fx()` below for a default effects driver that models effects
+ * as async thunks.
+ *
+ * Store is inspired by Redux and the Elm App Architecture Pattern.
+ * You can centralize all state in a single store, and use signals to scope
+ * down store state, or you can use multiple stores.
+ */
+export declare const store: <State, Msg>({ state: initial, update, msg, fx, }: {
+    state: State;
+    update: (state: State, msg: Msg) => State;
+    msg?: Msg;
+    fx: FxDriver<Msg>;
+}) => [Signal<State>, (msg: Msg) => void];
+export type Effect<Msg> = (() => Promise<Msg>) | (() => Msg);
+/**
+ * Create a standard fx plugin for a store.
+ * Effects are modeled as zero-argument
+ */
+export declare const asyncFx: <Msg>(generateFx: (msg: Msg) => Iterable<Effect<Msg>>) => (send: (msg: Msg) => void) => (msg: Msg) => void;
+/**
+ * Create a logging effect for a store.
+ *
+ */
+export declare const logFx: ({ name, debug }: {
+    name?: string;
+    debug?: (boolean | Signal<boolean>);
+}) => <Msg>(send: (msg: Msg) => void) => (msg: Msg) => void;
+export declare const composeFx: <Msg>(...drivers: FxDriver<Msg>[]) => FxDriver<Msg>;
