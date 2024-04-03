@@ -243,5 +243,4 @@ export const logFx = ({ name = "store", debug = true }) => (send) => (msg) => {
     }
     send(msg);
 };
-const applyTo = (value, fn) => fn(value);
-export const composeFx = (...drivers) => drivers.reduce(applyTo, id);
+export const composeFx = (...drivers) => (send) => drivers.reduce((send, driver) => driver(send), send);

@@ -412,6 +412,29 @@ describe('asyncFx', () => {
   })
 })
 
+describe('composeFx', () => {
+  it('it composes the fx drivers', done => {
+    const driverA = send => msg => send(`a${msg}`)
+    const driverB = send => msg => send(`b${msg}`)
+    const driverC = send => msg => send(`c${msg}`)
+
+    const driver = composeFx(
+      driverA,
+      driverB,
+      driverC
+    )
+
+    const send = msg => {
+      assertEqual(msg, 'abc123')
+      done()
+    }
+
+    const sendWithDrivers = driver(send)
+
+    sendWithDrivers('123')
+  })
+})
+
 describe('takeValues', () => {
   it('ends the signal on the first null or undefined value', async () => {
     const [maybeValue, setMaybeValue] = signal('a')

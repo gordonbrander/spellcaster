@@ -323,8 +323,11 @@ export const logFx = ({
   send(msg)
 }
 
-const applyTo = (value: any, fn: (value: any) => any) => fn(value)
-
 export const composeFx = <Msg>(
   ...drivers: Array<FxDriver<Msg>>
-): FxDriver<Msg> => drivers.reduce(applyTo, id)
+): FxDriver<Msg> => (
+  send: (msg: Msg) => void
+) => drivers.reduce(
+  (send, driver) => driver(send),
+  send
+)
