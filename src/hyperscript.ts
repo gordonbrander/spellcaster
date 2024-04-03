@@ -125,7 +125,29 @@ export const text = (
 ) => parent =>
   effect(() => setProp(parent, 'textContent', sample(text) ?? ''))
 
-const noConfigure = (parent: HTMLElement) => {}
+/** Mutate an object by passing it through a series of functions. */
+export const mod = <T>(
+  object: T,
+  ...modifiers: Array<(object: T) => void>
+) => {
+  for (const modify of modifiers) {
+    modify(object)
+  }
+  return object
+}
+
+/**
+ * Combine one or more object mutation functions into a single function.
+ * Can be used as the third argument to `h()` to apply multiple element
+ * modifiers.
+ * @example
+ * h('div', {className: 'wrapper'}, withMod(...modifiers))
+ */
+export const withMod = <T>(
+  modifiers: Array<(object: T) => void>
+) => (object: T) => mod(object, ...modifiers)
+
+const noOp = <T>(object: T) => {}
 
 const isArray = Array.isArray
 
@@ -135,26 +157,26 @@ const isArray = Array.isArray
  * @param tag - the HTML element type to create
  * @param properties - a signal or object containing
  *   properties to set on the element.
- * @param configure - either a function called with the element to configure it,
+ * @param modifier - either a function called with the element to modify it,
  *  or an array of HTMLElements and strings to append. Optional.
  * @returns {HTMLElement}
  */
 export const h = (
   tag: string,
   properties: Record<string, any> | Signal<Record<string, any>>,
-  configure: (
+  modifier: (
     Array<HTMLElement | string> |
     ((element: HTMLElement) => void)
-  ) = noConfigure
+  ) = noOp
 ) => {
   const element = document.createElement(tag)
 
   effect(() => setProps(element, sample(properties)))
 
-  if (isArray(configure)) {
-    element.replaceChildren(...configure)
+  if (isArray(modifier)) {
+    element.replaceChildren(...modifier)
   } else {
-    configure(element)
+    modifier(element)
   }
 
   return element
@@ -162,7 +184,7 @@ export const h = (
 
 type TagFactory = (
   properties: Record<string, any> | Signal<Record<string, any>>,
-  configure?: (
+  modifier?: (
     Array<HTMLElement | string> |
     ((element: HTMLElement) => void)
   )
@@ -176,7 +198,7 @@ type TagFactory = (
  * div({className: 'wrapper'})
  */
 export const tag = (tag: string): TagFactory =>
-  (properties, configure=noConfigure) => h(tag, properties, configure)
+  (properties, modifier=noOp) => h(tag, properties, modifier)
 
 /**
  * Create a tag factory function by accessing any property of `tags`.
