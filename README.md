@@ -249,13 +249,10 @@ const fetchCount = async () => {
 
 const update = (state, msg) => {
   switch (msg.type) {
-  case 'fetchCount':
-    // Include effects with transaction
-    return next(state, [fetchCount])
   case 'setCount':
-    return next({...state, count: msg.count})
+    return {...state, count: msg.count}
   default:
-    return next(state)
+    return state
   }
 }
 
