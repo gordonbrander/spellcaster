@@ -75,43 +75,71 @@ export declare const effect: (perform: () => void) => void;
 export declare const takeValues: <T>(maybeSignal: Signal<T>) => () => T;
 /** The ID function */
 export declare const id: (x: any) => any;
-export type FxDriver<Msg> = (send: (msg: Msg) => void) => (msg: Msg) => void;
+export type Middleware<Msg> = (send: (msg: Msg) => void) => (msg: Msg) => void;
 /**
  * Create reducer-style store for state.
+ * @param state - Initial state
+ * @param update - The update reducer function. Receives the current state
+ * and msg and returns the new state.
+ * @param msg - (Optional) initial message to send to the store
+ * @param middleware - (Optional) middleware to apply to the store
  *
- * Returns a pair of state signal and send function.
- * The send function receives messages, passing them to the `update` function
- * which returns the new state.
+ * @returns an array-pair containing state signal and send function.
  *
- * An optional `msg` parameter allows you to send an initial message to the
- * store.
- *
- * Side-effects can be provided by an fx driver that decorates the send
- * function. See `fx()` below for a default effects driver that models effects
- * as async thunks.
+ * Side-effects can be implemented by `middleware`. See `fx()` below for a
+ * default effects middleware that models effects as async zero-arg functions.
  *
  * Store is inspired by Redux and the Elm App Architecture Pattern.
  * You can centralize all state in a single store, and use signals to scope
  * down store state, or you can use multiple stores.
  */
-export declare const store: <State, Msg>({ state: initial, update, msg, fx, }: {
+export declare const store: <State, Msg>({ state: initial, update, msg, middleware: middleware, }: {
     state: State;
     update: (state: State, msg: Msg) => State;
     msg?: Msg;
-    fx: FxDriver<Msg>;
+    middleware: Middleware<Msg>;
 }) => [Signal<State>, (msg: Msg) => void];
 export type Effect<Msg> = (() => Promise<Msg>) | (() => Msg);
 /**
- * Create a standard fx plugin for a store.
- * Effects are modeled as zero-argument
- */
-export declare const asyncFx: <Msg>(generateFx: (msg: Msg) => Iterable<Effect<Msg>>) => (send: (msg: Msg) => void) => (msg: Msg) => void;
-/**
- * Create a logging effect for a store.
+ * Standard fx middleware for a store.
+ * Effects are modeled as zero-argument functions.
  *
+ * @example
+ * const fx = (msg: Msg) => {
+ *   switch (msg.type) {
+ *   case "fetch":
+ *     const req = async () => Msg.fetched(await fetch(msg.url).json())
+ *     return [req]
+ *   default:
+ *     return []
+ *   }
+ * }
+ *
+ * const [state, send] = store({
+ *   state,
+ *   update,
+ *   middleware: fxware(fx)
+ * })
  */
-export declare const logFx: ({ name, debug }: {
+export declare const fxware: <Msg>(generateFx: (msg: Msg) => Iterable<Effect<Msg>>) => (send: (msg: Msg) => void) => (msg: Msg) => void;
+/**
+ * Logging middleware for store.
+ * Logs actions sent to store. Since middleware is run from top-to-bottom,
+ * you'll typically want to stack this first in a middleware chain so all
+ * sends are logged.
+ * @example
+ * const [posts, sendPosts] = store({
+ *   state,
+ *   update,
+ *   middleware: logware({name: 'PostsStore', debug: true})
+ * })
+ */
+export declare const logware: ({ name, debug }: {
     name?: string;
     debug?: (boolean | Signal<boolean>);
 }) => <Msg>(send: (msg: Msg) => void) => (msg: Msg) => void;
-export declare const composeFx: <Msg>(...drivers: FxDriver<Msg>[]) => FxDriver<Msg>;
+/**
+ * Compose multiple store middlewares together.
+ * Order of execution will be from top to bottom.
+ */
+export declare const middleware: <Msg>(...middlewares: Middleware<Msg>[]) => Middleware<Msg>;

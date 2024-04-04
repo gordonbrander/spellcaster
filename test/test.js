@@ -10,9 +10,8 @@ import {
   effect,
   computed,
   store,
-  asyncFx,
-  logFx,
-  composeFx,
+  fxware,
+  middleware,
   isSignal,
   sample,
   takeValues
@@ -353,7 +352,7 @@ describe('asyncFx', () => {
     const [state, send] = store({
       state: init(),
       update,
-      fx: asyncFx(fx)
+      middleware: fxware(fx)
     })
 
     send(Msg.incLater)
@@ -401,7 +400,7 @@ describe('asyncFx', () => {
     const [state, send] = store({
       state: init(),
       update,
-      fx: asyncFx(fx)
+      middleware: fxware(fx)
     })
 
     send(Msg.incLater)
@@ -418,7 +417,7 @@ describe('composeFx', () => {
     const driverB = send => msg => send(`b${msg}`)
     const driverC = send => msg => send(`c${msg}`)
 
-    const driver = composeFx(
+    const driver = middleware(
       driverA,
       driverB,
       driverC
