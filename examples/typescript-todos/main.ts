@@ -1,9 +1,7 @@
 import {
   store,
   computed,
-  next,
-  unknown,
-  Transaction
+  logware
 } from '../../src/spellcaster.ts'
 
 import {
@@ -147,14 +145,12 @@ const App = (
   )
 }
 
-const init = (): Transaction<AppModel, Msg> => next(
-  AppModel({})
-)
+const init = () => AppModel({})
 
 const update = (
   state: AppModel,
   msg: Msg
-): Transaction<AppModel, Msg> => {
+): AppModel => {
   switch (msg.type) {
   case 'updateInput':
     return updateInput(state, msg.value)
@@ -163,14 +159,15 @@ const update = (
   case 'complete':
     return complete(state, msg.id)
   default:
-    return unknown(state, msg)
+    console.warn("Unknown message type", msg)
+    return state
   }
 }
 
 const updateInput = (
   state: AppModel,
   text: string
-): Transaction<AppModel, Msg> => next({
+) => AppModel({
   ...state,
   input: InputModel({text})
 })
@@ -178,37 +175,35 @@ const updateInput = (
 const submitInput = (
   state: AppModel,
   text: string
-): Transaction<AppModel, Msg> => next(
-  AppModel({
-    ...state,
-    input: InputModel({text: ''}),
-    todos: indexById<string, TodoModel>([
-      ...state.todos.values(),
-      TodoModel({text})
-    ])
-  })
-)
+) => AppModel({
+  ...state,
+  input: InputModel({text: ''}),
+  todos: indexById<string, TodoModel>([
+    ...state.todos.values(),
+    TodoModel({text})
+  ])
+})
 
 const complete = (
   state: AppModel,
   id: string
-): Transaction<AppModel, Msg> => {
+) => {
   if (!state.todos.has(id)) {
     console.log("No item for ID. Doing nothing.", id)
-    return next(state)
+    return state
   }
   const todos = new Map(state.todos)
   todos.delete(id)
-  return next({
+  return AppModel({
     ...state,
     todos
   })
 }
 
 const [state, send] = store({
-  init,
+  state: init(),
   update,
-  debug: true
+  middleware: logware({debug: true})
 })
 
 const appEl = App(state, send)
