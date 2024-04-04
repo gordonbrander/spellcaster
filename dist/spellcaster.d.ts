@@ -61,29 +61,6 @@ export declare const computed: <T>(compute: Signal<T>) => () => T;
  * state changes.
  */
 export declare const effect: (perform: () => void) => void;
-export type Effect<Msg> = (() => Promise<Msg>) | (() => Msg);
-export type Transaction<State, Msg> = {
-    state: State;
-    effects: Array<Effect<Msg>>;
-};
-/** Create a transaction object for the store. */
-export declare const next: <State, Msg>(state: State, effects?: Effect<Msg>[]) => Transaction<State, Msg>;
-/**
- * Create store for state. A web app can centralize all state in a single store,
- * and use Signals to scope store state down to DOM updates.
- * Store is inspired by the Elm App Architecture Pattern.
- */
-export declare const store: <State, Msg>({ init, update, debug }: {
-    init: () => Transaction<State, Msg>;
-    update: (state: State, msg: Msg) => Transaction<State, Msg>;
-    debug?: boolean;
-}) => [Signal<State>, (msg: Msg) => void];
-/**
- * Log an unknown message and return a no-op transaction. Useful for handling
- * the `default` arm of a switch statement in an update function to catch
- * anything sent to the store that you don't recognize.
- */
-export declare const unknown: <State, Msg>(state: State, msg: Msg) => Transaction<State, Msg>;
 /**
  * Transform a signal, returning a computed signal that takes values until
  * the given signal returns null. Once the given signal returns null, the
@@ -96,3 +73,73 @@ export declare const unknown: <State, Msg>(state: State, msg: Msg) => Transactio
  * signals, allowing the child signal to be garbaged.
  */
 export declare const takeValues: <T>(maybeSignal: Signal<T>) => () => T;
+/** The ID function */
+export declare const id: (x: any) => any;
+export type Middleware<Msg> = (send: (msg: Msg) => void) => (msg: Msg) => void;
+/**
+ * Create reducer-style store for state.
+ * @param state - Initial state
+ * @param update - The update reducer function. Receives the current state
+ * and msg and returns the new state.
+ * @param msg - (Optional) initial message to send to the store
+ * @param middleware - (Optional) middleware to apply to the store
+ *
+ * @returns an array-pair containing state signal and send function.
+ *
+ * Side-effects can be implemented by `middleware`. See `fx()` below for a
+ * default effects middleware that models effects as async zero-arg functions.
+ *
+ * Store is inspired by Redux and the Elm App Architecture Pattern.
+ * You can centralize all state in a single store, and use signals to scope
+ * down store state, or you can use multiple stores.
+ */
+export declare const store: <State, Msg>({ state: initial, update, msg, middleware: middleware, }: {
+    state: State;
+    update: (state: State, msg: Msg) => State;
+    msg?: Msg;
+    middleware: Middleware<Msg>;
+}) => [Signal<State>, (msg: Msg) => void];
+export type Effect<Msg> = (() => Promise<Msg>) | (() => Msg);
+/**
+ * Standard fx middleware for a store.
+ * Effects are modeled as zero-argument functions.
+ *
+ * @example
+ * const fx = (msg: Msg) => {
+ *   switch (msg.type) {
+ *   case "fetch":
+ *     const req = async () => Msg.fetched(await fetch(msg.url).json())
+ *     return [req]
+ *   default:
+ *     return []
+ *   }
+ * }
+ *
+ * const [state, send] = store({
+ *   state,
+ *   update,
+ *   middleware: fxware(fx)
+ * })
+ */
+export declare const fxware: <Msg>(generateFx: (msg: Msg) => Iterable<Effect<Msg>>) => (send: (msg: Msg) => void) => (msg: Msg) => void;
+/**
+ * Logging middleware for store.
+ * Logs actions sent to store. Since middleware is run from top-to-bottom,
+ * you'll typically want to stack this first in a middleware chain so all
+ * sends are logged.
+ * @example
+ * const [posts, sendPosts] = store({
+ *   state,
+ *   update,
+ *   middleware: logware({name: 'PostsStore', debug: true})
+ * })
+ */
+export declare const logware: ({ name, debug }: {
+    name?: string;
+    debug?: (boolean | Signal<boolean>);
+}) => <Msg>(send: (msg: Msg) => void) => (msg: Msg) => void;
+/**
+ * Compose multiple store middlewares together.
+ * Order of execution will be from top to bottom.
+ */
+export declare const middleware: <Msg>(...middlewares: Middleware<Msg>[]) => Middleware<Msg>;

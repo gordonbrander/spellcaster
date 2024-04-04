@@ -1,8 +1,7 @@
 import {
   store,
   computed,
-  next,
-  unknown
+  logware
 } from '../../dist/spellcaster.js'
 
 import {
@@ -94,9 +93,7 @@ const App = (state, send) => {
   )
 }
 
-const init = () => next(
-  modelApp({})
-)
+const init = () => modelApp({})
 
 const update = (state, msg) => {
   switch (msg.type) {
@@ -111,12 +108,12 @@ const update = (state, msg) => {
   }
 }
 
-const updateInput = (state, text) => next({
+const updateInput = (state, text) => ({
   ...state,
   input: modelInput({text})
 })
 
-const submitInput = (state, text) => next({
+const submitInput = (state, text) => ({
   ...state,
   input: modelInput({text: ''}),
   todos: indexById([
@@ -128,20 +125,17 @@ const submitInput = (state, text) => next({
 const complete = (state, id) => {
   if (!state.todos.has(id)) {
     console.log("No item for ID. Doing nothing.", id)
-    return next(state)
+    return state
   }
   const todos = new Map(state.todos)
   todos.delete(id)
-  return next({
-    ...state,
-    todos
-  })
+  return {...state, todos}
 }
 
 const [state, send] = store({
-  init,
+  state: init(),
   update,
-  debug: true
+  middleware: logware({debug: true})
 })
 
 window.state = state

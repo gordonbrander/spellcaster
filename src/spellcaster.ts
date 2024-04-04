@@ -193,81 +193,6 @@ export const effect = (perform: () => void) => {
   withTracking(performEffect, perform)
 }
 
-export type Effect<Msg> = (() => Promise<Msg>)|(() => Msg)
-
-export type Transaction<State, Msg> = {
-  state: State
-  effects: Array<Effect<Msg>>
-}
-
-/** Create a transaction object for the store. */
-export const next = <State, Msg>(
-  state: State,
-  effects: Array<Effect<Msg>>=[]
-): Transaction<State, Msg> => ({
-  state,
-  effects
-})
-  
-/**
- * Create store for state. A web app can centralize all state in a single store,
- * and use Signals to scope store state down to DOM updates.
- * Store is inspired by the Elm App Architecture Pattern.
- */
-export const store = <State, Msg>(
-  {
-    init,
-    update,
-    debug=false
-  }: {
-    init: () => Transaction<State, Msg>,
-    update: (state: State, msg: Msg) => Transaction<State, Msg>,
-    debug?: boolean
-  }
-): [Signal<State>, (msg: Msg) => void] => {
-  const initial = init()
-
-  if (debug) {
-    console.debug('store.state', initial.state)
-    console.debug('store.effects', initial.effects.length)
-  }
-
-  const [state, sendState] = signal(initial.state)
-
-  /** Send a message to the store */
-  const send = (msg: Msg) => {
-    const {state: next, effects} = update(state(), msg)
-    if (debug) {
-      console.debug('store.msg', msg)
-      console.debug('store.state', next)
-      console.debug('store.effects', effects.length)
-    }
-    sendState(next)
-    runEffects(effects)
-  }
-
-  /** Run an effect */
-  const runEffect = async (effect: Effect<Msg>) => send(await effect())
-
-  /** Run an array of effects concurrently */
-  const runEffects = (effects: Array<Effect<Msg>>) =>
-    effects.forEach(runEffect)
-
-  runEffects(initial.effects)
-
-  return [state, send]
-}
-
-/**
- * Log an unknown message and return a no-op transaction. Useful for handling
- * the `default` arm of a switch statement in an update function to catch
- * anything sent to the store that you don't recognize.
- */
-export const unknown = <State, Msg>(state: State, msg: Msg) => {
-  console.warn('Unknown message type', msg)
-  return next<State, Msg>(state)
-}
-
 /**
  * Transform a signal, returning a computed signal that takes values until
  * the given signal returns null. Once the given signal returns null, the
@@ -305,3 +230,132 @@ export const takeValues = <T>(maybeSignal: Signal<T|null|undefined>) => {
     }
   })
 }
+
+/** The ID function */
+export const id = (x: any) => x
+
+export type Middleware<Msg> = (send: (msg: Msg) => void) => (msg: Msg) => void
+
+/**
+ * Create reducer-style store for state.
+ * @param state - Initial state
+ * @param update - The update reducer function. Receives the current state
+ * and msg and returns the new state.
+ * @param msg - (Optional) initial message to send to the store
+ * @param middleware - (Optional) middleware to apply to the store
+ * 
+ * @returns an array-pair containing state signal and send function.
+ * 
+ * Side-effects can be implemented by `middleware`. See `fx()` below for a
+ * default effects middleware that models effects as async zero-arg functions.
+ * 
+ * Store is inspired by Redux and the Elm App Architecture Pattern.
+ * You can centralize all state in a single store, and use signals to scope
+ * down store state, or you can use multiple stores.
+ */
+export const store = <State, Msg>(
+  {
+    state: initial,
+    update,
+    msg = undefined,
+    middleware: middleware = id,
+  }: {
+    state: State,
+    update: (state: State, msg: Msg) => State,
+    msg?: Msg,
+    middleware: Middleware<Msg>
+  }
+): [Signal<State>, (msg: Msg) => void] => {
+  const [state, setState] = signal(initial)
+
+  /** Send a message to the store */
+  const send = (msg: Msg) => setState(update(state(), msg))
+  /** Decorated send function with middleware */
+  const sendWithMiddleware = middleware(send)
+
+  if (msg) {
+    sendWithMiddleware(msg)
+  }
+
+  return [state, sendWithMiddleware]
+}
+
+export type Effect<Msg> = (() => Promise<Msg>)|(() => Msg)
+
+/**
+ * Standard fx middleware for a store.
+ * Effects are modeled as zero-argument functions.
+ * 
+ * @example
+ * const fx = (msg: Msg) => {
+ *   switch (msg.type) {
+ *   case "fetch":
+ *     const req = async () => Msg.fetched(await fetch(msg.url).json())
+ *     return [req]
+ *   default:
+ *     return []
+ *   }
+ * }
+ * 
+ * const [state, send] = store({
+ *   state,
+ *   update,
+ *   middleware: fxware(fx)
+ * })
+ */
+export const fxware = <Msg>(
+  generateFx: (msg: Msg) => Iterable<Effect<Msg>>
+) => (send: (msg: Msg) => void) => {
+  const forkFx = async (fx: Effect<Msg>) => sendWithFx(await fx())
+
+  const forkAllFx = (effects: Iterable<Effect<Msg>>) => {
+    for (const fx of effects) {
+      forkFx(fx)
+    }
+  }
+
+  const sendWithFx = (msg: Msg) => {
+    send(msg)
+    forkAllFx(generateFx(msg))
+  }
+
+  return sendWithFx
+}
+
+/**
+ * Logging middleware for store.
+ * Logs actions sent to store. Since middleware is run from top-to-bottom,
+ * you'll typically want to stack this first in a middleware chain so all
+ * sends are logged.
+ * @example
+ * const [posts, sendPosts] = store({
+ *   state,
+ *   update,
+ *   middleware: logware({name: 'PostsStore', debug: true})
+ * })
+ */
+export const logware = ({
+  name = "store",
+  debug = true
+}: {
+  name?: string,
+  debug?: (boolean|Signal<boolean>)
+}) => <Msg>(send: (msg: Msg) => void) => (msg: Msg) => {
+  if (sample(debug)) {
+    console.log(name, msg)
+  }
+  send(msg)
+}
+
+/**
+ * Compose multiple store middlewares together.
+ * Order of execution will be from top to bottom.
+ */
+export const middleware = <Msg>(
+  ...middlewares: Array<Middleware<Msg>>
+): Middleware<Msg> => (
+  send: (msg: Msg) => void
+) => middlewares.reduce(
+  (send, middleware) => middleware(send),
+  send
+)

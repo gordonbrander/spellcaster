@@ -205,38 +205,39 @@ You never have to worry about registering and removing listeners, or cancelling 
 
 Simple apps that use local component state may not need `computed`, but it comes in handy for complex apps that want to centralize state in one place.
 
-## Using `store` to manage global app state
+## Using `store` to manage state with reducers
 
 `store` offers an Elm/Redux-like store for managing application state.
 
 - All application state can be centralized in a single store.
 - State is updated via a reducer function, making state changes predictable and reproducible.
-- Store manages asynchronous side-effects with an effects runner.
+- Supports asynchronous side-effects with effects middleware.
 
-`store` can be initialized and used much like `signal`. However, instead of being initialized with a value, it is initialized with two functions: `init()` and `update(state, msg)`. Both functions return a transaction object (created with `next`) that contains the next state. Store returns a signal for the state, as well as a send function that allows you to send messages to the store.
+`store` can be initialized and used much like `signal`. However, instead of being initialized with a value, it is initialized with a `state`, a reducer function, and an optional start msg. Store returns a signal for the state, as well as a `send(msg: Msg)` function that allows you to send messages to the store.
 
 ```js
-const init = () => next({
-  count: 0
-})
-
 const update = (state, msg) => {
   switch (msg.type) {
   case 'increment':
-    return next({...state, count: state.count + 1})
+    return {...state, count: state.count + 1}
   default:
-    return next(state)
+    return state
   }
 }
 
-const [state, send] = store({init, update})
+const [state, send] = store({
+  state: {count: 0},
+  update
+})
 
 console.log(state()) // {count: 0}
 send({type: 'increment'})
 console.log(state()) // {count: 1}
 ```
 
-Transactions can also include asynchronous side-effects, such as HTTP requests and timers. Effects are modeled as zero-argument functions that return a message, or a promise for a message.
+### Side-effects with middleware
+
+Stores can also manage asynchronous side-effects, such as HTTP requests and timers using middleware. Spellcaster offers a default effects middlware called `fxware`. Side-effects are modeled as zero-argument functions that return a message, or a promise for a message.
 
 ```js
 // Fetches count from API and returns it as a message
@@ -257,9 +258,49 @@ const update = (state, msg) => {
     return next(state)
   }
 }
+
+const fx = msg => {
+  switch (msg.type) {
+  case 'fetchCount':
+    return [fetchCount]
+  default:
+    return []
+  }
+}
+
+const [state, send] = store({
+  state,
+  update,
+  middleware: fxware(fx)
+})
 ```
 
 Store will perform each effect concurrently, and feed their resulting messages back into the store. This allows you to model side-effects along with state changes in your reducer function, making side-effects deterministic and predictable.
+
+### Creating and combining middleware
+
+Store middleware is just a function that takes a send function and returns a send function, e.g.:
+
+```typescript
+export type Middleware<Msg> = (send: (msg: Msg) => void) => (msg: Msg) => void
+```
+
+This makes it easy to write your own middleware.
+
+You can also combine middleware using a provided middleware composition helper:
+
+```js
+const [state, send] = store({
+  state,
+  update,
+  middleware: middleware(
+    logware({debug: true}),
+    fxware(fx)
+  )
+})
+```
+
+Middleware provides a very powerful customization hook for stores.
 
 ## Hyperscript
 

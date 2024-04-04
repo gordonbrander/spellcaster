@@ -9,8 +9,9 @@ import {
   signal,
   effect,
   computed,
-  next,
   store,
+  fxware,
+  middleware,
   isSignal,
   sample,
   takeValues
@@ -258,33 +259,27 @@ describe('computed', () => {
   })
 })
 
-describe('next', () => {
-  it('returns a transaction object', () => {
-    const fx = () => {}
-    const transaction = next(0, [fx])
-
-    assert(typeof transaction === 'object')
-    assert(transaction.state === 0)
-    assert(transaction.effects.length === 1)
-    assert(transaction.effects[0] === fx)
-  })
-})
-
 describe('store', () => {
   it('returns a signal as the first item of the array pair', () => {
-    const init = () => next({})
-    const update = (state, msg) => next({})
+    const initial = {}
+    const update = (state, msg) => ({})
 
-    const [state, send] = store({init, update})
+    const [state, send] = store({
+      state: initial,
+      update
+    })
 
     assert(isSignal(state))
   })
 
   it('returns a send function as the second item of the array pair', () => {
-    const init = () => next({})
-    const update = (state, msg) => next({})
+    const initial = {}
+    const update = (state, msg) => ({})
 
-    const [state, send] = store({init, update})
+    const [state, send] = store({
+      state: initial,
+      update
+    })
 
     assertEqual(typeof send, 'function')
     assertEqual(send.length, 1)
@@ -294,18 +289,21 @@ describe('store', () => {
     const Msg = {}
     Msg.inc = {type: 'inc'}
 
-    const init = () => next({count: 0})
+    const init = () => ({count: 0})
 
     const update = (state, msg) => {
       switch (msg.type) {
       case 'inc':
-        return next({...state, count: state.count + 1})
+        return {...state, count: state.count + 1}
       default:
-        return next(state)
+        return state
       }
     }
 
-    const [state, send] = store({init, update})
+    const [state, send] = store({
+      state: init(),
+      update
+    })
 
     assert(state().count === 0)
 
@@ -313,9 +311,11 @@ describe('store', () => {
 
     assert(state().count === 1)
   })
+})
 
-  it('runs effects', done => {
-    const TIMEOUT = 0
+describe('asyncFx', () => {
+  it('runs effects when plugged in as store fx driver', async () => {
+    const TIMEOUT = 1
 
     const Msg = {}
     Msg.incLater = {type: 'incLater'}
@@ -328,63 +328,109 @@ describe('store', () => {
       )
     })
 
-    const init = () => next({count: 0})
+    const init = () => ({count: 0})
 
     const update = (state, msg) => {
       switch (msg.type) {
-      case 'incLater':
-        const fx = () => delay(Msg.inc, TIMEOUT)
-        return next(state, [fx])
       case 'inc':
-        return next({...state, count: state.count + 1})
+        return {...state, count: state.count + 1}
       default:
-        return next(state)
+        return state
       }
     }
 
-    const [state, send] = store({init, update})
+    const fx = msg => {
+      switch (msg.type) {
+      case 'incLater':
+        const incFx = () => delay(Msg.inc, TIMEOUT)
+        return [incFx]
+      default:
+        return []
+      }
+    }
+
+    const [state, send] = store({
+      state: init(),
+      update,
+      middleware: fxware(fx)
+    })
+
     send(Msg.incLater)
 
-    setTimeout(
-      () => {
-        assertEqual(state().count, 1)
-        done()
-      },
-      TIMEOUT + 1
-    )
+    await delay(null, TIMEOUT + 1)
+
+    assertEqual(state().count, 1)
   })
 
-  it('runs effects that immediately return a value', done => {
-    const TIMEOUT = 0
+  it('runs effects that immediately return a value', async () => {
+    const TIMEOUT = 1
 
     const Msg = {}
     Msg.incLater = {type: 'incLater'}
     Msg.inc = {type: 'inc'}
 
-    const init = () => next({count: 0})
+    const delay = (value, ms) => new Promise(resolve => {
+      setTimeout(
+        () => resolve(value),
+        ms
+      )
+    })
+
+    const init = () => ({count: 0})
 
     const update = (state, msg) => {
       switch (msg.type) {
-      case 'incLater':
-        const fx = () => Msg.inc
-        return next(state, [fx])
       case 'inc':
-        return next({...state, count: state.count + 1})
+        return {...state, count: state.count + 1}
       default:
-        return next(state)
+        return state
       }
     }
 
-    const [state, send] = store({init, update})
+    const fx = msg => {
+      switch (msg.type) {
+      case 'incLater':
+        const incFx = () => Msg.inc
+        return [incFx]
+      default:
+        return []
+      }
+    }
+
+    const [state, send] = store({
+      state: init(),
+      update,
+      middleware: fxware(fx)
+    })
+
     send(Msg.incLater)
 
-    setTimeout(
-      () => {
-        assertEqual(state().count, 1)
-        done()
-      },
-      TIMEOUT + 1
+    await delay(null, TIMEOUT + 1)
+
+    assertEqual(state().count, 1)
+  })
+})
+
+describe('composeFx', () => {
+  it('it composes the fx drivers', done => {
+    const driverA = send => msg => send(`a${msg}`)
+    const driverB = send => msg => send(`b${msg}`)
+    const driverC = send => msg => send(`c${msg}`)
+
+    const driver = middleware(
+      driverA,
+      driverB,
+      driverC
     )
+
+    const send = msg => {
+      assertEqual(msg, 'abc123')
+      done()
+    }
+
+    const sendWithDrivers = driver(send)
+
+    sendWithDrivers('123')
   })
 })
 
