@@ -209,11 +209,11 @@ Simple apps that use local component state may not need `computed`, but it comes
 
 `store` offers an Elm/Redux-like store for managing application state.
 
-- All application state can be centralized in a single store.
 - State is updated via a reducer function, making state changes predictable and reproducible.
 - Supports asynchronous side-effects with effects middleware.
+- State can be centralized in a single store, like Redux, or contained in multiple stores, like useReducer
 
-`store` can be initialized and used much like `signal`. However, instead of being initialized with a value, it is initialized with a `state`, a reducer function, and an optional start msg. Store returns a signal for the state, as well as a `send(msg: Msg)` function that allows you to send messages to the store.
+`store` can be initialized and used much like `signal`. However, instead of being initialized with a value, it is initialized with an options object containing an initial `state`, a reducer function, and an optional start msg. Store returns an array pair containing a signal for the state, and a `send(msg)` function that allows you to send messages to the store.
 
 ```js
 const update = (state, msg) => {
