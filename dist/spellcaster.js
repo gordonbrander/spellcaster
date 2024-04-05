@@ -145,12 +145,39 @@ export const computed = (compute) => {
  * `perform` is executed within a reactive scope, so signals referenced within
  * `perform` will automatically cause `perform` to be re-run when signal
  * state changes.
+ *
+ * `perform` may optionally return a zero-argument cleanup function that will
+ * be called just before the effect is re-run.
+ *
+ * Returns a dispose function that will end the effect, run cleanup, and
+ * prevent further reactive updates. Note it is not typically necessary to
+ * dispose an effect, so in most cases you can ignore the returned dispose
+ * function. Since effects only react to the signals they reference, and
+ * clean up after themselves, you can simply stop referencing a signal to
+ * stop reacting (e.g. using a boolean signal and if statement to turn
+ * on/off an effect). However, the returned dispose function can be useful
+ * when an effect's lifecycle is tied to the lifecycle of a component or class,
+ * and that component or class has a destructor.
  */
 export const effect = (perform) => {
+    let isRunning = true;
+    const dispose = () => {
+        if (typeof cleanup === 'function') {
+            cleanup();
+        }
+        isRunning = false;
+    };
     const performEffect = throttled(() => {
-        withTracking(performEffect, perform);
+        if (!isRunning) {
+            return;
+        }
+        if (typeof cleanup === 'function') {
+            cleanup();
+        }
+        cleanup = withTracking(performEffect, perform);
     });
-    withTracking(performEffect, perform);
+    let cleanup = withTracking(performEffect, perform);
+    return dispose;
 };
 /**
  * Transform a signal, returning a computed signal that takes values until

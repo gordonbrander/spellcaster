@@ -19,7 +19,7 @@ export type View<State> = (state: Signal<State>) => HTMLElement;
  * Create a function to efficiently render a dynamic list of views on a
  * parent element.
  */
-export declare const repeat: <Key, State>(states: Signal<Map<Key, State>>, view: View<State>) => (parent: HTMLElement) => void;
+export declare const repeat: <Key, State>(states: Signal<Map<Key, State>>, view: View<State>) => (parent: HTMLElement) => () => void;
 /**
  * Insert element at index.
  * If element is already at index, this function is a no-op
@@ -34,7 +34,7 @@ export declare const shadow: (...children: Array<HTMLElement | string>) => (pare
  * Write a value or signal of values to the text content of a parent element.
  * Value will be coerced to string. If nullish, will be coerced to empty string.
  */
-export declare const text: (text: Signal<any> | any) => (parent: any) => void;
+export declare const text: (text: Signal<any> | any) => (parent: any) => () => void;
 /**
  * Signals-aware hyperscript.
  * Create an element that can be updated with signals.
