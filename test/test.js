@@ -17,6 +17,13 @@ import {
   takeValues
 } from "../dist/spellcaster.js"
 
+const delay = (value, ms) => new Promise(resolve => {
+  setTimeout(
+    () => resolve(value),
+    ms
+  )
+})
+
 describe('withTracking', () => {
   it('executes the body function immediately and returns the value', () => {
     const onChange = () => {}
@@ -231,6 +238,38 @@ describe('effect', () => {
     setA(10)
     setB(10)
   })
+
+  it('runs the cleanup function before next execution', async () => {
+    const [counter, setCounter] = signal(0)
+
+    let callCount = 0
+    let cleanupCount = 0
+    effect(() => {
+      counter()
+      callCount++
+      cleanupCount++
+      return () => cleanupCount--
+    })
+    await delay(null, 1)
+    setCounter(1)
+    await delay(null, 1)
+    setCounter(2)
+    await delay(null, 1)
+    setCounter(3)
+    await delay(null, 1)
+
+    assertEqual(callCount, 4)
+    assertEqual(cleanupCount, 1)
+  })
+
+  it('runs the cleanup when running the dispose function', async () => {
+    let cleanupCount = 0
+    const dispose = effect(() => {
+      return () => cleanupCount++
+    })
+    dispose()
+    assertEqual(cleanupCount, 1)
+  })
 })
 
 describe('computed', () => {
@@ -313,20 +352,13 @@ describe('store', () => {
   })
 })
 
-describe('asyncFx', () => {
+describe('fxware', () => {
   it('runs effects when plugged in as store fx driver', async () => {
     const TIMEOUT = 1
 
     const Msg = {}
     Msg.incLater = {type: 'incLater'}
     Msg.inc = {type: 'inc'}
-
-    const delay = (value, ms) => new Promise(resolve => {
-      setTimeout(
-        () => resolve(value),
-        ms
-      )
-    })
 
     const init = () => ({count: 0})
 
@@ -369,13 +401,6 @@ describe('asyncFx', () => {
     Msg.incLater = {type: 'incLater'}
     Msg.inc = {type: 'inc'}
 
-    const delay = (value, ms) => new Promise(resolve => {
-      setTimeout(
-        () => resolve(value),
-        ms
-      )
-    })
-
     const init = () => ({count: 0})
 
     const update = (state, msg) => {
@@ -411,7 +436,7 @@ describe('asyncFx', () => {
   })
 })
 
-describe('composeFx', () => {
+describe('middleware', () => {
   it('it composes the fx drivers', done => {
     const driverA = send => msg => send(`a${msg}`)
     const driverB = send => msg => send(`b${msg}`)
