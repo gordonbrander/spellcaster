@@ -29,5 +29,8 @@
   "devDependencies": {
     "mocha": "^10.2.0",
     "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "signal-polyfill": "^0.1.0"
   }
 }

@@ -2,10 +2,7 @@ import { describe, it } from "mocha"
 import { strict as assert, strictEqual as assertEqual, fail } from "assert"
 
 import {
-  withTracking,
-  getTracked,
   throttled,
-  transaction,
   signal,
   effect,
   computed,
@@ -22,39 +19,6 @@ const delay = (value, ms) => new Promise(resolve => {
     () => resolve(value),
     ms
   )
-})
-
-describe('withTracking', () => {
-  it('executes the body function immediately and returns the value', () => {
-    const onChange = () => {}
-
-    const didExecute = withTracking(
-        onChange,
-        () => true
-    )
-    assert(didExecute)
-  })
-
-  it('sets the dependency for the tracking scope', done => {
-    const onChange = () => {}
-
-    withTracking(
-      onChange,
-      () => {
-        const dependency = getTracked()
-        assert(dependency === onChange)
-        done()
-      }
-    )
-  })
-})
-
-describe('getTracked', () => {
-  it('returns undefined outside of tracking scopes', () => {
-    const dependency = getTracked()
-
-    assert(dependency == null)
-  })
 })
 
 describe('throttled', () => {
@@ -75,76 +39,22 @@ describe('throttled', () => {
   })
 })
 
-describe('transaction', () => {
-  it('executes the transaction immediately', () => {
-    const didChange = transaction()
-    
-    let didRun = false
-    didChange.withTransaction(() => {
-      didRun = true
-    })
-
-    didChange.transact()
-
-    assert(didRun)
-  })
-
-  it('adds listeners only once', () => {
-    const didChange = transaction()
-    
-    let count = 0
-    const inc = () => {
-      count++
-    }
-
-    didChange.withTransaction(inc)
-    didChange.withTransaction(inc)
-    didChange.withTransaction(inc)
-
-    didChange.transact()
-
-    assert(count === 1)
-  })
-
-  it('executes listeners only once, on next transaction, then drops them', () => {
-    const didChange = transaction()
-    
-    let count = 0
-    const inc = () => {
-      count++
-    }
-
-    didChange.withTransaction(inc)
-
-    didChange.transact()
-    didChange.transact()
-    didChange.transact()
-
-    assert(count === 1)
-  })
-})
-
 describe('signal getter', () => {
   it('returns value', () => {
     const [state, _] = signal(0)
     assert(state() === 0)
   })
 
-  it('triggers withTracking transaction callback on change, when read within reactive scope', done => {
-    const [state, setState] = signal(0)
+  it('triggers reaction when read within reactive scope', done => {
+    const [state, setState] = signal(false)
 
-    withTracking(
-      () => {
-        // Done should be called during next transaction
+    effect(() => {
+      if (state()) {
         done()
-      },
-      () => {
-        // Access state so that it is tracked
-        state()
       }
-    )
+    })
 
-    setState(10)
+    setState(true)
   })
 })
 
