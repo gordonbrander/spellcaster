@@ -1,27 +1,4 @@
-/**
- * Creates a dependency tracker
- * We use this to allow signals to automatically gather their downstream
- * dependencies.
- */
-export declare const dependencyTracker: () => {
-    withTracking: <T>(onChange: () => void, perform: () => T) => T;
-    getTracked: () => ((() => void) | undefined);
-};
-export declare const withTracking: <T>(onChange: () => void, perform: () => T) => T, getTracked: () => ((() => void) | undefined);
-/**
- * Given a zero-argument function, create a throttled version of that function
- * that will run only once per microtask.
- */
-export declare const throttled: (job: () => void) => (() => void);
-/**
- * Create a transaction notification publisher.
- * Allows you to register listeners that are called once during the next
- * transaction.
- */
-export declare const transaction: () => {
-    withTransaction: (listener: (() => void) | undefined) => void;
-    transact: () => void;
-};
+import { Signal } from 'signal-polyfill';
 /**
  * A signal is a zero-argument function that returns a value.
  * Reactive signals created with `signal()` will cause reactive contexts
@@ -54,6 +31,11 @@ export declare const signal: <T>(initial: T) => [Signal<T>, (value: T) => void];
  * state changes.
  */
 export declare const computed: <T>(compute: Signal<T>) => () => T;
+/**
+ * Given a zero-argument function, create a throttled version of that function
+ * that will run only once per microtask.
+ */
+export declare const throttled: (job: () => void, queue?: (callback: () => void) => void) => (() => void);
 /**
  * Perform a side-effect whenever signals referenced within `perform` change.
  * `perform` is executed within a reactive scope, so signals referenced within

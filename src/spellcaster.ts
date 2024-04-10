@@ -52,7 +52,10 @@ export const computed = <T>(compute: Signal<T>) => {
  * Given a zero-argument function, create a throttled version of that function
  * that will run only once per microtask.
  */
-export const throttled = (job: () => void): (() => void) => {
+export const throttled = (
+  job: () => void,
+  queue: ((callback: () => void) => void) = queueMicrotask
+): (() => void) => {
   let isScheduled = false
 
   const perform = () => {
@@ -63,12 +66,19 @@ export const throttled = (job: () => void): (() => void) => {
   const schedule = () => {
     if (!isScheduled) {
       isScheduled = true
-      queueMicrotask(perform)
+      queue(perform)
     }
   }
 
   return schedule
 }
+
+const watcher = new Signal.subtle.Watcher(throttled(() => {
+  for (const signal of watcher.getPending()) {
+    signal.get()
+  }
+  watcher.watch()
+}))
 
 type Cleanup = () => void
 
@@ -92,26 +102,24 @@ type Cleanup = () => void
  * and that component or class has a destructor.
  */
 export const effect = (perform: () => unknown) => {
-  let isRunning = true
+  let cleanup: any
+
+  const signal = new Signal.Computed(() => {
+    if (typeof cleanup === 'function') {
+      cleanup()
+    }
+    cleanup = perform()
+  })
+
+  watcher.watch(signal)
+  signal.get()
 
   const dispose = () => {
     if (typeof cleanup === 'function') {
       cleanup()
     }
-    isRunning = false
+    watcher.unwatch(signal)
   }
-
-  const performEffect = throttled(() => {
-    if (!isRunning) {
-      return
-    }
-    if (typeof cleanup === 'function') {
-      cleanup()
-    }
-    cleanup = withTracking(performEffect, perform)
-  })
-
-  let cleanup = withTracking(performEffect, perform)
 
   return dispose
 }
