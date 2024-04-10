@@ -1,91 +1,4 @@
-/**
- * Creates a dependency tracker
- * We use this to allow signals to automatically gather their downstream
- * dependencies.
- */
-export const dependencyTracker = () => {
-  const scopes: Array<() => void> = []
-
-  /** Get the current tracked scope */
-  const getTracked = (): ((() => void) | undefined) =>
-    scopes[scopes.length - 1]
-
-  /** Perform a function while setting thunk as the current tracked scope */
-  const withTracking = <T>(
-    onChange: () => void,
-    perform: () => T
-  ): T => {
-    scopes.push(onChange)
-    const value = perform()
-    scopes.pop()
-    return value
-  }
-
-  return {withTracking, getTracked}
-}
-
-export const {withTracking, getTracked} = dependencyTracker()
-  
-/**
- * Given a zero-argument function, create a throttled version of that function
- * that will run only once per microtask.
- */
-export const throttled = (job: () => void): (() => void) => {
-  let isScheduled = false
-
-  const perform = () => {
-    job()
-    isScheduled = false
-  }
-
-  const schedule = () => {
-    if (!isScheduled) {
-      isScheduled = true
-      queueMicrotask(perform)
-    }
-  }
-
-  return schedule
-}
-
-/**
- * Create a transaction notification publisher.
- * Allows you to register listeners that are called once during the next
- * transaction.
- */
-export const transaction = () => {
-  let transaction: Set<(() => void)> = new Set()
-
-  /**
-   * Add listener to current transaction.
-   * Listener functions are deduped. E.g. if you add the same listener twice to
-   * the same transaction, it's only added once.
-   */
-  const withTransaction = (listener: (() => void)|undefined) => {
-    if (typeof listener === 'function') {
-      transaction.add(listener)
-    }
-  }
-
-  /**
-   * Perform a transaction.
-   * Listeners in transaction are notified once and then forgotten.
-   */
-  const transact = () => {
-    // Capture transaction
-    const listeners = transaction
-    // Create a new transaction. This transaction will gather dependencies
-    // queued while executing listeners.
-    transaction = new Set()
-    // Perform transaction.
-    for (const listener of listeners) {
-      listener()
-    }
-    // Listeners are released after scope exits so they can be garbaged.
-  }
-
-  return {withTransaction, transact}
-}
+import {Signal} from 'signal-polyfill'
 
 /**
  * A signal is a zero-argument function that returns a value.
@@ -115,34 +28,10 @@ export const sample = <T>(value: T|Signal<T>): T =>
  * `effect`, the scope will automatically re-execute when the signal changes.
  */
 export const signal = <T>(initial: T): [Signal<T>, (value: T) => void] => {
-  const didChange = transaction()
-
-  let state = initial
-
-  /**
-   * Read current signal state
-   * When read within reactive scopes, such as `computed` or `effect`,
-   * the scope will automatically re-execute when the signal changes.
-   */
-  const read = () => {
-    didChange.withTransaction(getTracked())
-    return state
-  }
-
-  /**
-   * Set signal value.
-   * A value will only be set and trigger a reactive transaction if it
-   * the new value is different from the old value as determined by a
-   * strict equality check.
-   */
-  const set = (value: T) => {
-    if (state !== value) {
-      state = value
-      didChange.transact()
-    }
-  }
-
-  return [read, set]
+  const state = new Signal.State(initial)
+  const get = () => state.get()
+  const set = (value: T) => state.set(value)
+  return [get, set]
 }
 
 /**
@@ -154,30 +43,31 @@ export const signal = <T>(initial: T): [Signal<T>, (value: T) => void] => {
  * state changes.
  */
 export const computed = <T>(compute: Signal<T>) => {
-  const didChange = transaction()
+  const computed = new Signal.Computed(compute)
+  const get = () => computed.get()
+  return get
+}
 
-  // We batch recomputes to solve the diamond problem.
-  // Every upstream signal read within the computed's tracking scope can
-  // independently generate a change notification. This means if two upstream
-  // signals change at once, our transaction callback gets called twice.
-  // By scheduling batch updates on the next microtask, we ensure that the
-  // computed signal is recomputed only once per event loop turn.
-  const recompute = throttled(() => {
-    const value = withTracking(recompute, compute)
-    if (state !== value) {
-      state = value
-      didChange.transact()
-    }
-  })
+/**
+ * Given a zero-argument function, create a throttled version of that function
+ * that will run only once per microtask.
+ */
+export const throttled = (job: () => void): (() => void) => {
+  let isScheduled = false
 
-  const read = () => {
-    didChange.withTransaction(getTracked())
-    return state
+  const perform = () => {
+    job()
+    isScheduled = false
   }
 
-  let state = withTracking(recompute, compute)
+  const schedule = () => {
+    if (!isScheduled) {
+      isScheduled = true
+      queueMicrotask(perform)
+    }
+  }
 
-  return read
+  return schedule
 }
 
 type Cleanup = () => void
