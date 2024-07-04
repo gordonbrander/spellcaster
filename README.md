@@ -29,7 +29,7 @@ console.log(count()) // 1
 
 So far, so good. But signals have a hidden superpower: they're reactive! When we reference a signal within a rective scope, that scope will re-run whenever the signal value updates.
 
-Spellcaster uses this superpower to offer React-like with vanilla elements. Signals are bound to specific points in the DOM tree, and whenever the signal updates, a fine-grained update is made to the DOM. For example, here's a simple counter app:
+Spellcaster uses this superpower to offer React-like components for vanilla DOM elements. Signals are bound to specific points in the DOM tree, and whenever the signal updates, a fine-grained update is made to the DOM. For example, here's a simple counter app:
 
 ```js
 import {signal} from 'spellcaster/spellcaster.js'
