@@ -2,7 +2,7 @@ import {
   signal,
   computed,
   effect
-} from '../../dist/spellcaster.js'
+} from '../../bundle/spellcaster.js'
 
 const [a, setA] = signal(0)
 const [b, setB] = signal(0)

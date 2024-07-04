@@ -2,7 +2,7 @@ import {
   signal,
   computed,
   effect
-} from '../../dist/spellcaster.js'
+} from '../../bundle/spellcaster.js'
 
 const [clock, sendClock] = signal(Date.now())
 
