@@ -246,3 +246,102 @@ const setProps = (
     setProp(element, key, value)
   }
 }
+
+const templates = new Map<string, HTMLTemplateElement>();
+
+/** Get cached template tag for string */
+const template = (html: string) => {
+  let template = templates.get(html);
+  if (template == null) {
+    template = document.createElement('template');
+    template.innerHTML = html;
+    templates.set(html, template);
+  }
+  return template;
+}
+
+template.clear = () => {
+  templates.clear();
+}
+
+const replaceWith = (node: Node | undefined, replacement: Node) => {
+  if (node == null) {
+    console.warn('Node to replace is undefined');
+    return
+  }
+  node.parentNode.replaceChild(replacement, node);
+}
+
+const replaceContent = (node: Node, replacement: any) => {
+  if (replacement instanceof Node) {
+    replaceWith(node, replacement);
+  } else {
+    replaceWith(node, document.createTextNode(`${replacement}`));
+  }
+}
+
+const isPropKey = (key: string) => key.startsWith('.')
+
+const cleanPropKey = (key: string) => key.replace(/\./, '')
+
+const replaceReactiveProp = (element: Element, key: string, value: any) => {
+  // Remove leading dot
+  const cleanKey = cleanPropKey(key)
+  effect(() => element[cleanKey] = sample(value))
+  element.removeAttribute(key)
+}
+
+const isEventKey = (key: string) => key.startsWith('@')
+
+const cleanEventKey = (key: string) => key.replace(/^@/, '')
+
+const replaceEvent = (element: Element, key: string, value: any) => {
+  // Remove leading dot
+  const cleanKey = cleanEventKey(key);
+  effect(() => element[`on${cleanKey}`] = sample(value))
+  element.removeAttribute(key);
+}
+
+const TEMPLATE_MARKER = '#SPELLCASTER_TEMPLATE_MARKER#'
+
+export const html = (strings: TemplateStringsArray, ...replacements: any[]) => {
+  const str = strings.join(TEMPLATE_MARKER);
+  const templateEl = template(str);
+  const cloneEl = templateEl.content.cloneNode(true);
+
+  const walker = document.createTreeWalker(
+    cloneEl,
+    NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT
+  );
+
+  // Reverse replacements, since we want to replace from left to right.
+  // Popping off of the end of the reversed array is a bit more efficient.
+  replacements.reverse();
+
+  // Do template replacements
+  let node: Node;
+  while (node = walker.nextNode()) {
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const element = node as Element;
+      // Capture attrs, since we're about to modify them during iteration.
+      const attrs = Array.from(element.attributes);
+      for (const attr of attrs) {
+        if (attr.value === TEMPLATE_MARKER) {
+          const replacement = replacements.pop();
+          if (isPropKey(attr.name)) {
+            replaceReactiveProp(element, attr.name, replacement);
+          } else if (isEventKey(attr.name)) {
+            replaceEvent(element, attr.name, replacement);
+          } else {
+            element.setAttribute(attr.name, replacement);
+          }
+        }
+      }
+    } else if (node.nodeType === Node.TEXT_NODE) {
+      const replacement = replacements.pop();
+      replaceContent(node, replacement);
+    }
+  }
+
+  return cloneEl;
+}
