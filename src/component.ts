@@ -1,3 +1,16 @@
+const cssCache = new Map<string, CSSStyleSheet>()
+
+/** Get or create a cached stylesheet from a string */
+export const css = (cssString: string): CSSStyleSheet => {
+  if (cssCache.has(cssString)) {
+    return cssCache.get(cssString)
+  }
+  const sheet = new CSSStyleSheet()
+  sheet.replaceSync(cssString)
+  cssCache.set(cssString, sheet)
+  return sheet
+}
+
 export class SpellcasterElement<T> extends HTMLElement {
   #state: T|undefined = undefined
   #shadow: ShadowRoot
@@ -36,7 +49,7 @@ export class SpellcasterElement<T> extends HTMLElement {
  * @example
  * const Foo = component({
  *   tag: 'x-foo',
- *   css: () => [css`h1 { color: red; }`],
+ *   css: () => [css(`h1 { color: red; }`)],
  *   html: (state) => {
  *     return div({}, text(() => state().title))
  *   }
