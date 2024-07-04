@@ -2,7 +2,7 @@ import {
   store,
   computed,
   logware
-} from '../../dist/spellcaster.js'
+} from '../../bundle/spellcaster.js'
 
 import {
   tags,
@@ -141,4 +141,4 @@ const [state, send] = store({
 window.state = state
 
 const appEl = App(state, send)
-document.body.append(appEl)
+document.body.replaceChildren(appEl)

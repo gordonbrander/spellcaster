@@ -25,7 +25,7 @@
   },
   "scripts": {
     "prepare": "tsc -p tsconfig.json",
-    "bundle_lib": "esbuild --bundle --minify --sourcemap --external:signal-polyfill --target=esnext --platform=browser --format=esm --outfile=bundle/index.js src/index.ts",
+    "bundle_lib": "esbuild --bundle --minify --sourcemap --external:signal-polyfill --target=esnext --platform=browser --format=esm --outfile=bundle/spellcaster.js src/index.ts",
     "bundle_polyfill": "esbuild --bundle --minify --sourcemap --target=esnext --platform=browser --format=esm --outfile=bundle/signal-polyfill.js src/signal-polyfill.ts",
     "bundle": "npm run bundle_polyfill && npm run bundle_lib",
     "test": "tsc -p tsconfig.json && mocha"
