@@ -84,9 +84,9 @@ TypeScript types are exported using the newer package.json `exports` field. To a
 
 ### As a vanilla JS library
 
-Spellcaster is also available as a vanilla JS modules... no npm or build step necessary!
+Spellcaster is also available as a vanilla JS module... no npm or build step necessary!
 
-To use the Spellcaser as a vanilla JS module, download the zip from the latest release, and then import the library and signals polyfill (provided with the download).
+To use the Spellcaser as a vanilla JS module, download the bundle zip from the latest release, and then import the library and signals polyfill (provided with the download).
 
 In your HTML file, add the following to the head:
 
