@@ -80,8 +80,6 @@ const watcher = new Signal.subtle.Watcher(throttled(() => {
   watcher.watch()
 }))
 
-type Cleanup = () => void
-
 /**
  * Perform a side-effect whenever signals referenced within `perform` change.
  * `perform` is executed within a reactive scope, so signals referenced within
