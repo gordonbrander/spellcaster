@@ -95,7 +95,7 @@ In your HTML file, add the following to the head:
   {
     "imports": {
       "signal-polyfill": "./path/to/signal-polyfill.js",
-      "spellcaser": "./path/to/spellcaster.js"
+      "spellcaster": "./path/to/spellcaster.js"
     }
   }
 </script>
