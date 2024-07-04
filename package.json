@@ -25,13 +25,18 @@
   },
   "scripts": {
     "prepare": "tsc -p tsconfig.json",
+    "bundle": "esbuild --bundle --minify --sourcemap --target=esnext --platform=browser --format=esm --outfile=bundle/index.js src/index.ts",
     "test": "tsc -p tsconfig.json && mocha"
   },
   "directories": {
     "test": "./test"
   },
   "devDependencies": {
+    "esbuild": "^0.23.0",
     "mocha": "^10.2.0",
     "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "signal-polyfill": "^0.1.0"
   }
 }
