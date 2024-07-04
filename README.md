@@ -4,9 +4,8 @@
 
 Reactive UI without dark magic.
 
-- Fine-grained reactive signals with automatic dependency tracking
-- Zero dependencies, no build step
-- Vanilla JS with types provided by TypeScript
+- Fine-grained reactive signals using the [TC39 Standard Signals polyfill](https://github.com/tc39/proposal-signals)
+- Available as either a Typescript package or a vanilla JS bundle (with no build step)
 - Less than 4kb compressed
 
 ## Introduction
