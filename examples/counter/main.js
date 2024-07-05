@@ -1,6 +1,6 @@
-import {signal} from '../../dist/spellcaster.js'
-import {tags, text} from '../../dist/hyperscript.js'
-const {div, button} = tags
+import {signal, hyperscript} from '../../bundle/spellcaster.js'
+const {text} = hyperscript
+const {div, button} = hyperscript.tags
 
 const Counter = () => {
   const [count, setCount] = signal(0)
@@ -20,4 +20,4 @@ const Counter = () => {
   )
 }
 
-document.body.append(Counter())
+document.body.replaceChildren(Counter())

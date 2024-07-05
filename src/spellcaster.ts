@@ -1,4 +1,4 @@
-import {Signal} from 'signal-polyfill'
+import {Signal} from './signal-polyfill.js'
 
 /**
  * A signal is a zero-argument function that returns a value.

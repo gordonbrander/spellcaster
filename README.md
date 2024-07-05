@@ -27,51 +27,49 @@ setCount(1)
 console.log(count()) // 1
 ```
 
-So far, so good. But signals have a hidden superpower: they're reactive!
+So far, so good. But signals have a hidden superpower: they're reactive! When we reference a signal within a rective scope, that scope will re-run whenever the signal value updates.
 
-When we reference a signal within a rective scope, that scope will re-run whenever the signal value updates. For example, let's create a derived signal from another signal, using `computed()`.
-
-```js
-import {signal, computed} from 'spellcaster/spellcaster.js'
-
-const [todos, setTodos] = signal([
-  { text: 'Chop wood', isComplete: true },
-  { text: 'Carry water', isComplete: false }
-])
-
-// Create a computed signal from other signals
-const completed = computed(() => {
-  // Re-runs automatically when todos signal changes
-  return todos().filter(todo => todo.isComplete).length
-})
-
-console.log(completed()) // 1
-```
-
-`computed` runs the function you provide within a reactive scope, so when the signal changes, the function is re-run.
-
-What about when you want to react to value changes? That's where `effect` comes in. It lets you perform a side-effect whenever a signal changes:
+Spellcaster uses this superpower to offer React-like components for vanilla DOM elements. Signals are bound to specific points in the DOM tree, and whenever the signal updates, a fine-grained update is made to the DOM. For example, here's a simple counter app:
 
 ```js
-// Log every time title changes
-effect(() => console.log(title()))
-```
+import {signal} from 'spellcaster/spellcaster.js'
+import {tags, text} from 'spellcaster/hyperscript.js'
+const {div, button} = tags
 
-Effect is where signals meet the real world. You can use `effect` like you might use `useEffect` in React... to kick off HTTP requests, perform DOM mutations, or anything else that should react to state updates.
+const Counter = () => {
+  const [count, setCount] = signal(0)
+
+  return div(
+    {className: 'counter'},
+    [
+      div({className: 'counter-text'}, text(count)),
+      button(
+        {
+          className: 'counter-button',
+          onclick: () => setCount(count() + 1)
+        },
+        text('Increment')
+      )
+    ]
+  )
+}
+
+document.body.append(Counter())
+```
 
 ## Installation
+
+### Via NPM
 
 ```
 npm install spellcaster
 ```
 
-Then import into JavaScript or TypeScript files:
+Then import into JavaScript or TypeScript:
 
 ```js
 import * as spellcaster from 'spellcaster/spellcaster.js'
 ```
-
-Spellcaster is a vanilla JavaScript module, so you can also just copy the js files from `dist/` and import them directly from your HTML or JS file. No build step needed.
 
 TypeScript types are exported using the newer package.json `exports` field. To access types, you'll want to use Typescript >= 4.7, and add the following to your `tsconfig.json`:
 
@@ -81,6 +79,34 @@ TypeScript types are exported using the newer package.json `exports` field. To a
   "moduleResolution": "node16" // or "nodenext"
 }
 ```
+
+### As a vanilla JS library
+
+Spellcaster is also available as a vanilla JS module... no npm or build step necessary!
+
+To use the Spellcaser as a vanilla JS module, download the bundle zip from the [latest release](https://github.com/gordonbrander/spellcaster/releases/latest), and then import the library and signals polyfill (provided with the download).
+
+In your HTML file, add the following to the head:
+
+```html
+<script type="importmap">
+  {
+    "imports": {
+      "signal-polyfill": "./path/to/signal-polyfill.js",
+      "spellcaster": "./path/to/spellcaster.js"
+    }
+  }
+</script>
+<script type="module" src="path/to/main.js"></script>
+```
+
+Now you can import Spellcaster from your vanilla JS module:
+
+```js
+import {signal} from 'spellcaster'
+```
+
+Happy hacking!
 
 ## Creating reactive components with signals
 
@@ -204,6 +230,28 @@ You never have to worry about registering and removing listeners, or cancelling 
 
 Simple apps that use local component state may not need `computed`, but it comes in handy for complex apps that want to centralize state in one place.
 
+## Performing side-effects with `effect`
+
+What about when you want do something in response to signal changes? This is where `effect` comes in. It lets you perform a side-effect whenever a signal changes:
+
+```js
+// Log every time title changes
+effect(() => console.log(title()))
+```
+
+Effect is where signals meet the real world. You can use `effect` like you might use `useEffect` in React... to kick off HTTP requests, perform DOM mutations, or anything else that should react to state updates.
+
+Effect can also optionally return a function to perform cleanup between updates:
+
+```js
+// Log every time title changes
+effect(() => {
+  const x = new ResourceOfSomeKind()
+  x.perform()
+  return () => x.close()
+})
+```
+
 ## Using `store` to manage state with reducers
 
 `store` offers an Elm/Redux-like store for managing application state.
@@ -326,6 +374,8 @@ const Greeting = greeting => h(
 Greeting("Hello world")
 ```
 
+### Named tag functions
+
 Alternatively, we can use the hyperscript `tags` object to get named hyperscript functions:
 
 ```js
@@ -354,6 +404,42 @@ const Modal = (isHidden, children) => div(
   children
 )
 ```
+
+### Web components
+
+Spellcaster Hyperscript also offers a lightweight way to define Web Components:
+
+```js
+import {component} from 'spellcaster/hyperscript.js'
+
+// Define component, returning hyperscript tag
+const Title = component({
+  tag: 'x-title',
+  css: () => css`
+    :host {
+      display: block;
+    }
+  `,
+  html: ({title}) => {
+    return h(
+      'h1',
+      {className: 'title'},
+      text(title)
+    )
+  }
+})
+
+const [title, setTitle] = signal('Hello Component!')
+
+// Create instance of component element
+const element = Title({
+  title
+})
+```
+
+If you want more control, you can also extend the underlying `SpellcasterElement` component class.
+
+### Dynamic lists
 
 What about rendering dynamic lists of children? For this, we can use `repeat(signal, view)`. It takes a signal of `Map<Key, Item>`, and will efficiently re-render children, updating, moving, or removing elements as needed, making the minimal number of DOM modifications.
 
