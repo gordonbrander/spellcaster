@@ -21,10 +21,6 @@
     "./hyperscript.js": {
       "import": "./dist/hyperscript.js",
       "types": "./dist/hyperscript.d.ts"
-    },
-    "./component.js": {
-      "import": "./dist/component.js",
-      "types": "./dist/component.d.ts"
     }
   },
   "scripts": {

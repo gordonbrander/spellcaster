@@ -125,9 +125,12 @@ export const text = (
 ) => parent =>
   effect(() => setProp(parent, 'textContent', sample(text) ?? ''))
 
-const noConfigure = (parent: HTMLElement) => {}
-
 const isArray = Array.isArray
+
+export type ElementConfigurator = (
+  Array<Element | string> |
+  ((element: Element) => void)
+)
 
 /**
  * Signals-aware hyperscript.
@@ -142,30 +145,19 @@ const isArray = Array.isArray
 export const h = (
   tag: string,
   properties: Record<string, any> | Signal<Record<string, any>>,
-  configure: (
-    Array<HTMLElement | string> |
-    ((element: HTMLElement) => void)
-  ) = noConfigure
+  configure: ElementConfigurator = noConfigure
 ) => {
   const element = document.createElement(tag)
 
   effect(() => setProps(element, sample(properties)))
-
-  if (isArray(configure)) {
-    element.replaceChildren(...configure)
-  } else {
-    configure(element)
-  }
+  configureElement(element, configure)
 
   return element
 }
 
 type TagFactory = (
   properties: Record<string, any> | Signal<Record<string, any>>,
-  configure?: (
-    Array<HTMLElement | string> |
-    ((element: HTMLElement) => void)
-  )
+  configure?: ElementConfigurator
 ) => HTMLElement
 
 /**
@@ -198,6 +190,19 @@ export const tags: Record<string, TagFactory> = new Proxy(
     }
   }
 )
+
+const noConfigure = (parent: HTMLElement) => {}
+
+const configureElement = (
+  element: Element,
+  configure: ElementConfigurator = noConfigure
+) => {
+  if (isArray(configure)) {
+    element.replaceChildren(...configure)
+  } else {
+    configure(element)
+  }
+}
 
 /**
  * Layout-triggering DOM properties.
@@ -245,4 +250,120 @@ const setProps = (
   for (const [key, value] of Object.entries(props)) {
     setProp(element, key, value)
   }
+}
+
+const stylesheetCache = new Map<string, CSSStyleSheet>()
+
+/** Get or create a cached stylesheet from a string */
+export const stylesheet = (cssString: string): CSSStyleSheet => {
+  if (stylesheetCache.has(cssString)) {
+    return stylesheetCache.get(cssString)
+  }
+  const sheet = new CSSStyleSheet()
+  sheet.replaceSync(cssString)
+  stylesheetCache.set(cssString, sheet)
+  return sheet
+}
+
+/**
+ * CSS template literal tag
+ * Takes a string without replacements and returns a CSSStyleSheet.
+ */
+export const css = (parts: TemplateStringsArray) => {
+  if (parts.length !== 1) {
+    throw new TypeError(`css string must not contain dynamic replacements`)
+  }
+  const [cssString] = parts
+  return stylesheet(cssString)
+}
+
+/**
+ * Custom element base for Spellcaster
+ */
+export class SpellcasterElement<T> extends HTMLElement {
+  #state: T | undefined = undefined
+  #shadow: ShadowRoot
+
+  constructor() {
+    super()
+    this.#shadow = this.createShadow()
+    this.#shadow.adoptedStyleSheets = this.css()
+  }
+
+  createShadow() {
+    return this.attachShadow({mode: 'closed'})
+  }
+
+  css(): CSSStyleSheet[] {
+    return []
+  }
+
+  html(state: T): Node {
+    return new DocumentFragment()
+  }
+
+  setState(state: T) {
+    this.#state = state
+    this.#shadow.replaceChildren(this.html(state))
+  }
+
+  get state() {
+    return this.#state
+  }
+
+  set state(state: T) {
+    this.setState(state)
+  }
+}
+
+const noCSS = () => []
+
+/**
+ * Define and register a custom reactive element.
+ * Returns a hyperscript function that creates an instance of the element.
+ * 
+ * Calling `setState()` or `element.state = value` will rebuild the element's
+ * shadow DOM using the `html()` function. This is typically done once at
+ * construction, and then signals are allowed to perform fine-grained from
+ * there on. However, you can call `setState()` or `element.state = value` at
+ * any time to rebuild and re-bind the element's signals.
+ * 
+ * @example
+ * const Foo = component({
+ *   tag: 'x-foo',
+ *   css: () => [css(`h1 { color: red; }`)],
+ *   html: (state) => {
+ *     return div({}, text(() => state().title))
+ *   }
+ * }
+ * 
+ * const fooEl = Foo(someSignal)
+ */
+export const component = ({
+  tag,
+  css = noCSS,
+  html
+}) => {
+  class CustomSpellcasterElement<T> extends SpellcasterElement<T> {
+    css() {
+      return css()
+    }
+
+    html(state: T) {
+      return html(state)
+    }
+  }
+
+  customElements.define(tag, CustomSpellcasterElement)
+
+  const create = <T>(
+    state: T,
+    configure: ElementConfigurator = noConfigure
+  ) => {
+    const element = h(tag, {}, configure) as SpellcasterElement<T>
+    element.setState(state)
+    return element
+  }
+
+  return create
 }
