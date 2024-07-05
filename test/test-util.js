@@ -1,6 +1,6 @@
 import { describe, it } from "mocha"
-import { strict as assert, strictEqual as assertEqual, fail } from "assert"
-import { cid, index, indexById } from "../dist/hyperscript.js"
+import { strict as assert } from "assert"
+import { cid, index, indexById } from "../dist/util.js"
 
 describe('cid', () => {
   it('returns a string', () => {
