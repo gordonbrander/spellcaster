@@ -95,8 +95,8 @@ export const text = (
 const isArray = Array.isArray
 
 export type ElementConfigurator = (
-  Array<Element | string> |
-  ((element: Element) => void)
+  Array<HTMLElement | string> |
+  ((element: HTMLElement) => void)
 )
 
 /**
@@ -161,7 +161,7 @@ export const tags: Record<string, TagFactory> = new Proxy(
 const noConfigure = (parent: HTMLElement) => {}
 
 const configureElement = (
-  element: Element,
+  element: HTMLElement,
   configure: ElementConfigurator = noConfigure
 ) => {
   if (isArray(configure)) {
