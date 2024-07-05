@@ -374,6 +374,8 @@ const Greeting = greeting => h(
 Greeting("Hello world")
 ```
 
+### Named tag functions
+
 Alternatively, we can use the hyperscript `tags` object to get named hyperscript functions:
 
 ```js
@@ -402,6 +404,42 @@ const Modal = (isHidden, children) => div(
   children
 )
 ```
+
+### Web components
+
+Spellcaster Hyperscript also offers a lightweight way to define Web Components:
+
+```js
+import {component} from 'spellcaster/hyperscript.js'
+
+// Define component, returning hyperscript tag
+const Title = component({
+  tag: 'x-title',
+  css: () => css`
+    :host {
+      display: block;
+    }
+  `,
+  html: ({title}) => {
+    return h(
+      'h1',
+      {className: 'title'},
+      text(title)
+    )
+  }
+})
+
+const [title, setTitle] = signal('Hello Component!')
+
+// Create instance of component element
+const element = Title({
+  title
+})
+```
+
+If you want more control, you can also extend the underlying `SpellcasterElement` component class.
+
+### Dynamic lists
 
 What about rendering dynamic lists of children? For this, we can use `repeat(signal, view)`. It takes a signal of `Map<Key, Item>`, and will efficiently re-render children, updating, moving, or removing elements as needed, making the minimal number of DOM modifications.
 
