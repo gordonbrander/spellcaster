@@ -5,6 +5,7 @@
         "outDir": "dist",
         "esModuleInterop": true,
         "declaration": true,
+        "lib": ["ESNext", "DOM", "DOM.Iterable"],
     },
     "include": ["src"],
     "exclude": ["node_modules", "examples"]
