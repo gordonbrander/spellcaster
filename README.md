@@ -84,7 +84,7 @@ TypeScript types are exported using the newer package.json `exports` field. To a
 
 Spellcaster is also available as a vanilla JS module... no npm or build step necessary!
 
-To use the Spellcaser as a vanilla JS module, download the bundle zip from the latest release, and then import the library and signals polyfill (provided with the download).
+To use the Spellcaser as a vanilla JS module, download the bundle zip from the [latest release](https://github.com/gordonbrander/spellcaster/releases/latest), and then import the library and signals polyfill (provided with the download).
 
 In your HTML file, add the following to the head:
 
@@ -97,6 +97,7 @@ In your HTML file, add the following to the head:
     }
   }
 </script>
+<script type="module" src="path/to/main.js"></script>
 ```
 
 Now you can import Spellcaster from your vanilla JS module:
