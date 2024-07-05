@@ -71,8 +71,6 @@ Then import into JavaScript or TypeScript:
 import * as spellcaster from 'spellcaster/spellcaster.js'
 ```
 
-Spellcaster is a vanilla JavaScript module, so you can also just copy the js files from `dist/` and import them directly from your HTML or JS file. No build step needed.
-
 TypeScript types are exported using the newer package.json `exports` field. To access types, you'll want to use Typescript >= 4.7, and add the following to your `tsconfig.json`:
 
 ```js
@@ -86,7 +84,7 @@ TypeScript types are exported using the newer package.json `exports` field. To a
 
 Spellcaster is also available as a vanilla JS module... no npm or build step necessary!
 
-To use the Spellcaser as a vanilla JS module, download the bundle zip from the latest release, and then import the library and signals polyfill (provided with the download).
+To use the Spellcaser as a vanilla JS module, download the bundle zip from the [latest release](https://github.com/gordonbrander/spellcaster/releases/latest), and then import the library and signals polyfill (provided with the download).
 
 In your HTML file, add the following to the head:
 
@@ -99,6 +97,7 @@ In your HTML file, add the following to the head:
     }
   }
 </script>
+<script type="module" src="path/to/main.js"></script>
 ```
 
 Now you can import Spellcaster from your vanilla JS module:
