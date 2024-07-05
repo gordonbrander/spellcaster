@@ -71,8 +71,6 @@ Then import into JavaScript or TypeScript:
 import * as spellcaster from 'spellcaster/spellcaster.js'
 ```
 
-Spellcaster is a vanilla JavaScript module, so you can also just copy the js files from `dist/` and import them directly from your HTML or JS file. No build step needed.
-
 TypeScript types are exported using the newer package.json `exports` field. To access types, you'll want to use Typescript >= 4.7, and add the following to your `tsconfig.json`:
 
 ```js
