@@ -187,12 +187,12 @@ export const store = <State, Msg>(
     state: initial,
     update,
     msg = undefined,
-    middleware: middleware = id,
+    middleware = id,
   }: {
     state: State,
     update: (state: State, msg: Msg) => State,
     msg?: Msg,
-    middleware: Middleware<Msg>
+    middleware?: Middleware<Msg>
   }
 ): [Signal<State>, (msg: Msg) => void] => {
   const [state, setState] = signal(initial)
