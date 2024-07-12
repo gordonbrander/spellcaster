@@ -254,17 +254,15 @@ export class SpellcasterElement<T> extends HTMLElement {
     return new DocumentFragment();
   }
 
-  setState(state: T) {
-    this.#state = state;
-    this.#shadow.replaceChildren(this.render(state));
-  }
-
   get state() {
     return this.#state;
   }
 
   set state(state: T) {
-    this.setState(state);
+    if (this.#state !== state) {
+      this.#state = state;
+      this.#shadow.replaceChildren(this.render(state));
+    }
   }
 }
 
