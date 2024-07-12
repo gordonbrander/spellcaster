@@ -95,28 +95,28 @@ export type ElementConfigurator =
  * Signals-aware hyperscript.
  * Create an element that can be updated with signals.
  * @param tag - the HTML element type to create
- * @param properties - a signal or object containing
+ * @param props - a signal or object containing
  *   properties to set on the element.
  * @param configure - either a function called with the element to configure it,
  *  or an array of HTMLElements and strings to append. Optional.
  */
-export const h = (
+export const h = <T = HTMLElement>(
   tag: string,
-  properties: Record<string, any> | Signal<Record<string, any>>,
+  props: Record<string, any> | Signal<Record<string, any>> = {},
   configure: ElementConfigurator = noConfigure,
-): HTMLElement => {
+): T => {
   const element = document.createElement(tag);
 
-  effect(() => setProps(element, sample(properties)));
+  effect(() => setProps(element, sample(props)));
   configureElement(element, configure);
 
-  return element;
+  return element as T;
 };
 
-type TagFactory = (
-  properties: Record<string, any> | Signal<Record<string, any>>,
+type TagFactory<T = HTMLElement> = (
+  props?: Record<string, any> | Signal<Record<string, any>>,
   configure?: ElementConfigurator,
-) => HTMLElement;
+) => T;
 
 /**
  * Create a tag factory function - a specialized version of `h()` for a
@@ -126,9 +126,9 @@ type TagFactory = (
  * div({className: 'wrapper'})
  */
 export const tag =
-  (tag: string): TagFactory =>
-  (properties, configure = noConfigure) =>
-    h(tag, properties, configure);
+  <T = HTMLElement>(tag: string): TagFactory<T> =>
+  (props = {}, configure = noConfigure) =>
+    h(tag, props, configure);
 
 /**
  * Create a tag factory function by accessing any property of `tags`.
@@ -242,14 +242,27 @@ export class SpellcasterElement<T> extends HTMLElement {
     this.#shadow.adoptedStyleSheets = this.styles();
   }
 
+  /** Attach the shadow root for the element */
   createShadow() {
     return this.attachShadow({ mode: "closed" });
   }
 
+  /**
+   * Stylesheets for the shadow root to adopt
+   * Override this method, returning an array of CSSStyleSheets to style
+   * the shadow DOM.
+   *
+   * Tip: use the `css` function as the tagging function for a template string to
+   * create a CSSStyleSheet.
+   */
   styles(): CSSStyleSheet[] {
     return [];
   }
 
+  /**
+   * Build an element to replace the contents of the shadow DOM.
+   * Called whenever state is updated.
+   */
   render(state: T): Node {
     return new DocumentFragment();
   }
@@ -258,6 +271,13 @@ export class SpellcasterElement<T> extends HTMLElement {
     return this.#state;
   }
 
+  /**
+   * Set element state.
+   * When used with signals, this is typically called once after element
+   * construction. Efficient updates to the shadow DOM are done via passing
+   * in one or more signals, and allowing fine-grained reactivity to update the
+   * element's DOM.
+   */
   set state(state: T) {
     if (this.#state !== state) {
       this.#state = state;
@@ -295,7 +315,7 @@ const noStyles = () => [];
  * });
  */
 export const component = <T>({
-  tag,
+  tag: tagName,
   styles = noStyles,
   render,
 }: {
@@ -313,10 +333,10 @@ export const component = <T>({
     }
   }
 
-  customElements.define(tag, CustomSpellcasterElement);
+  customElements.define(tagName, CustomSpellcasterElement);
 
   const create = (props = {}, configure: ElementConfigurator = noConfigure) =>
-    h(tag, props, configure) as CustomSpellcasterElement;
+    h(tagName, props, configure) as CustomSpellcasterElement;
 
-  return create;
+  return tag(tagName) as TagFactory<CustomSpellcasterElement>;
 };
