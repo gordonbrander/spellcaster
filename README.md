@@ -410,34 +410,39 @@ const Modal = (isHidden, children) => div(
 Spellcaster Hyperscript also offers a lightweight way to define Web Components:
 
 ```js
-import {component} from 'spellcaster/hyperscript.js'
+import { component, css } from "spellcaster/hyperscript.js"
 
-// Define component, returning hyperscript tag
+// Define component, returning a hyperscript function
 const Title = component({
-  tag: 'x-title',
-  css: () => css`
+  tag: "x-title"",
+  styles: () => [
+    css`
     :host {
       display: block;
     }
-  `,
-  html: ({title}) => {
+    `
+  ],
+  render: (title) => {
     return h(
-      'h1',
-      {className: 'title'},
+      "h1",
+      { className: "title" },
       text(title)
     )
   }
 })
 
-const [title, setTitle] = signal('Hello Component!')
+const [title, setTitle] = signal("Hello Component!")
 
 // Create instance of component element
 const element = Title({
-  title
+  id: "title",
+  state: title
 })
 ```
 
-If you want more control, you can also extend the underlying `SpellcasterElement` component class.
+All components defined with `component()` have a `state` property which can be used to set the component's state. `render()` is called whenever the `state` property is set, and the element returned by `render()` replaces the current contents of the shadow DOM. As with other elements in Spellcaster, this is typically done just once. You construct the element, passing in one or more signals, and let fine-grained reactivity handle the rest.
+
+If you want more control, you can also extend the underlying `SpellcasterElement` component class directly.
 
 ### Dynamic lists
 
