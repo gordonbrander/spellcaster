@@ -339,7 +339,7 @@ export const component = <T>({
   customElements.define(tag, CustomSpellcasterElement);
 
   const create = (
-    props?: Props,
+    props: Props & { state: T },
     configure?: ElementConfigurator,
   ): StatefulElement<T> => h(tag, props, configure);
 
