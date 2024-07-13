@@ -113,10 +113,12 @@ export const h = <T = HTMLElement>(
   return element as T;
 };
 
-type TagFactory<T = HTMLElement> = (
-  props?: Record<string, any> | Signal<Record<string, any>>,
+export type Props = Record<string, any> | Signal<Record<string, any>>;
+
+type TagFactory = (
+  props?: Props,
   configure?: ElementConfigurator,
-) => T;
+) => HTMLElement;
 
 /**
  * Create a tag factory function - a specialized version of `h()` for a
@@ -126,7 +128,7 @@ type TagFactory<T = HTMLElement> = (
  * div({className: 'wrapper'})
  */
 export const tag =
-  <T = HTMLElement>(tag: string): TagFactory<T> =>
+  (tag: string): TagFactory =>
   (props = {}, configure = noConfigure) =>
     h(tag, props, configure);
 
@@ -243,7 +245,7 @@ export class SpellcasterElement<T> extends HTMLElement {
   }
 
   /** Attach the shadow root for the element */
-  createShadow() {
+  createShadow(): ShadowRoot {
     return this.attachShadow({ mode: "closed" });
   }
 
@@ -263,11 +265,11 @@ export class SpellcasterElement<T> extends HTMLElement {
    * Build an element to replace the contents of the shadow DOM.
    * Called whenever state is updated.
    */
-  render(state: T): Node {
+  render(state: T): HTMLElement | DocumentFragment {
     return new DocumentFragment();
   }
 
-  get state() {
+  get state(): T {
     return this.#state;
   }
 
@@ -285,6 +287,8 @@ export class SpellcasterElement<T> extends HTMLElement {
     }
   }
 }
+
+export type StatefulElement<T> = HTMLElement & { state: T };
 
 const noStyles = () => [];
 
@@ -314,7 +318,7 @@ const noStyles = () => [];
  * });
  */
 export const component = <T>({
-  tag: tagName,
+  tag,
   styles = noStyles,
   render,
 }: {
@@ -332,7 +336,12 @@ export const component = <T>({
     }
   }
 
-  customElements.define(tagName, CustomSpellcasterElement);
+  customElements.define(tag, CustomSpellcasterElement);
 
-  return tag(tagName) as TagFactory<CustomSpellcasterElement>;
+  const create = (
+    props?: Props,
+    configure?: ElementConfigurator,
+  ): StatefulElement<T> => h(tag, props, configure);
+
+  return create;
 };
