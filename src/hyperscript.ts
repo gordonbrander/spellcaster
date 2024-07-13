@@ -292,11 +292,10 @@ const noStyles = () => [];
  * Define and register a custom reactive element.
  * Returns a hyperscript function that creates an instance of the element.
  *
- * Calling `setState()` or `element.state = value` will rebuild the element's
- * shadow DOM using the `html()` function. This is typically done once at
- * construction, and then signals are allowed to perform fine-grained from
- * there on. However, you can call `setState()` or `element.state = value` at
- * any time to rebuild and re-bind the element's signals.
+ * Calling `element.state = value` will rebuild the element's shadow DOM using
+ * the `render()` function. This is typically done only once at construction,
+ * and then signals are allowed to perform fine-grained updates from
+ * there on.
  *
  * @example
  * const Foo = component({
