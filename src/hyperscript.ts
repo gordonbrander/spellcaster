@@ -335,8 +335,5 @@ export const component = <T>({
 
   customElements.define(tagName, CustomSpellcasterElement);
 
-  const create = (props = {}, configure: ElementConfigurator = noConfigure) =>
-    h(tagName, props, configure) as CustomSpellcasterElement;
-
   return tag(tagName) as TagFactory<CustomSpellcasterElement>;
 };
