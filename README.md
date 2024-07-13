@@ -414,7 +414,7 @@ import { component, css } from "spellcaster/hyperscript.js"
 
 // Define component, returning a hyperscript function
 const Title = component({
-  tag: "x-title"",
+  tag: "x-title",
   styles: () => [
     css`
     :host {
