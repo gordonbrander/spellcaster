@@ -287,3 +287,14 @@ export const middleware =
   <Msg>(...middlewares: Array<Middleware<Msg>>): Middleware<Msg> =>
   (send: (msg: Msg) => void) =>
     middlewares.reduce((send, middleware) => middleware(send), send);
+
+/** Create a reducer - signal that only updates based on a stepping function */
+export const reducer = <State, Msg>(
+  update: (state: State, msg: Msg) => State,
+  initial: State,
+) => {
+  return store({
+    state: initial,
+    update,
+  });
+};
