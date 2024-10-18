@@ -253,8 +253,8 @@ export const fxware =
     };
 
     const sendWithFx = (msg: Msg) => {
-      send(msg);
       forkAllFx(generateFx(state(), msg));
+      send(msg);
     };
 
     return sendWithFx;
