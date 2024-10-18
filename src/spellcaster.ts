@@ -162,10 +162,15 @@ export const takeValues = <T>(maybeSignal: Signal<T | null | undefined>) => {
   });
 };
 
-/** The ID function */
-export const id = (x: any) => x;
+const noware =
+  <State, Msg>(_state: State) =>
+  (send: (msg: Msg) => void) => {
+    return send;
+  };
 
-export type Middleware<Msg> = (send: (msg: Msg) => void) => (msg: Msg) => void;
+export type Middleware<State, Msg> = (
+  state: Signal<State>,
+) => (send: (msg: Msg) => void) => (msg: Msg) => void;
 
 /**
  * Create reducer-style store for state.
@@ -188,25 +193,26 @@ export const store = <State, Msg>({
   state: initial,
   update,
   msg = undefined,
-  middleware = id,
+  middleware = noware,
 }: {
   state: State;
   update: (state: State, msg: Msg) => State;
   msg?: Msg;
-  middleware?: Middleware<Msg>;
+  middleware?: Middleware<State, Msg>;
 }): [Signal<State>, (msg: Msg) => void] => {
   const [state, setState] = signal(initial);
 
   /** Send a message to the store */
   const send = (msg: Msg) => setState(update(state(), msg));
   /** Decorated send function with middleware */
-  const sendWithMiddleware = middleware(send);
+  const decorate = middleware(state);
+  const sendDecorated = decorate(send);
 
   if (msg) {
-    sendWithMiddleware(msg);
+    sendDecorated(msg);
   }
 
-  return [state, sendWithMiddleware];
+  return [state, sendDecorated];
 };
 
 export type Effect<Msg> = (() => Promise<Msg>) | (() => Msg);
@@ -216,10 +222,12 @@ export type Effect<Msg> = (() => Promise<Msg>) | (() => Msg);
  * Effects are modeled as zero-argument functions.
  *
  * @example
- * const fx = (msg: Msg) => {
+ * const fx = (state: State, msg: Msg) => {
  *   switch (msg.type) {
  *   case "fetch":
- *     const req = async () => Msg.fetched(await fetch(msg.url).json())
+ *     const req = async () => Msg.fetched(
+ *       await fetch(state.url, msg.endpoint).json()
+ *     )
  *     return [req]
  *   default:
  *     return []
@@ -233,7 +241,8 @@ export type Effect<Msg> = (() => Promise<Msg>) | (() => Msg);
  * })
  */
 export const fxware =
-  <Msg>(generateFx: (msg: Msg) => Iterable<Effect<Msg>>) =>
+  <State, Msg>(generateFx: (state: State, msg: Msg) => Iterable<Effect<Msg>>) =>
+  (state: Signal<State>) =>
   (send: (msg: Msg) => void) => {
     const forkFx = async (fx: Effect<Msg>) => sendWithFx(await fx());
 
@@ -244,8 +253,8 @@ export const fxware =
     };
 
     const sendWithFx = (msg: Msg) => {
+      forkAllFx(generateFx(state(), msg));
       send(msg);
-      forkAllFx(generateFx(msg));
     };
 
     return sendWithFx;
@@ -271,12 +280,14 @@ export const logware =
     name?: string;
     debug?: boolean | Signal<boolean>;
   }) =>
-  <Msg>(send: (msg: Msg) => void) =>
+  <State, Msg>(state: Signal<State>) =>
+  (send: (msg: Msg) => void) =>
   (msg: Msg) => {
     if (sample(debug)) {
-      console.log(name, msg);
+      console.log(`${name} < msg`, msg);
     }
     send(msg);
+    console.log(`${name} > state`, state());
   };
 
 /**
@@ -284,6 +295,13 @@ export const logware =
  * Order of execution will be from top to bottom.
  */
 export const middleware =
-  <Msg>(...middlewares: Array<Middleware<Msg>>): Middleware<Msg> =>
-  (send: (msg: Msg) => void) =>
-    middlewares.reduce((send, middleware) => middleware(send), send);
+  <State, Msg>(
+    ...middlewares: Array<Middleware<State, Msg>>
+  ): Middleware<State, Msg> =>
+  (state: Signal<State>) =>
+  (send: (msg: Msg) => void) => {
+    return middlewares.reduce((send, middleware) => {
+      const decorate = middleware(state);
+      return decorate(send);
+    }, send);
+  };
