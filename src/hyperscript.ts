@@ -261,8 +261,8 @@ export class SpellcasterElement extends HTMLElement {
   /**
    * Build element Shadow DOM.
    * Automatically invoked once, when element is first connected to the DOM.
-   * You may also invoke it yourself manually at any time to build or rebuild
-   * the Shadow DOM.
+   * You may also invoke it yourself manually to build the Shadow DOM before
+   * appending.
    */
   build() {
     if (this.#didBuild) return;
