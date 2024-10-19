@@ -35,16 +35,6 @@ export const signal = <T>(initial: T): [Signal<T>, (value: T) => void] => {
 };
 
 /**
- * Create a signal that holds a reference to its own setter.
- */
-export const state = <T>(initial: T) => {
-  const state = new Signal.State(initial);
-  const get = () => state.get();
-  get.set = (value: T) => state.set(value);
-  return get;
-};
-
-/**
  * Create a computed signal
  * Computed sigal takes a zero-argument function, `compute` which may read
  * from any other signal to produce a value.
@@ -57,6 +47,12 @@ export const computed = <T>(compute: Signal<T>) => {
   const get = () => computed.get();
   return get;
 };
+
+/** A signal that always returns the same value and never changes */
+export const always =
+  <T>(initial: T) =>
+  () =>
+    initial;
 
 /**
  * Given a zero-argument function, create a throttled version of that function

@@ -1,4 +1,11 @@
-import { effect, takeValues, sample, Signal } from "./spellcaster.js";
+import {
+  effect,
+  takeValues,
+  sample,
+  Signal,
+  always,
+  signal,
+} from "./spellcaster.js";
 
 export { cid, getId, indexById, index, Identifiable } from "./util.js";
 
@@ -247,11 +254,12 @@ export const css = (parts: TemplateStringsArray) => {
 export class SpellcasterElement extends HTMLElement {
   #didBuild = false;
   #shadow: ShadowRoot;
+  styles: Array<CSSStyleSheet> = [];
 
   constructor() {
     super();
     this.#shadow = this.createShadow();
-    this.#shadow.adoptedStyleSheets = this.styles;
+    this.#shadow.adoptedStyleSheets = this?.styles ?? [];
   }
 
   connectedCallback() {
@@ -275,19 +283,39 @@ export class SpellcasterElement extends HTMLElement {
     return this.attachShadow({ mode: "closed" });
   }
 
-  /**
-   * Stylesheets for the shadow root to adopt
-   * Override this method, returning an array of CSSStyleSheets to style
-   * the shadow DOM.
-   *
-   * Tip: use the `css` function as the tagging function for a template string to
-   * create a CSSStyleSheet.
-   */
-  get styles(): CSSStyleSheet[] {
-    return [];
-  }
-
   render(): HTMLElement | DocumentFragment | string {
     return "";
   }
 }
+
+type CustomSpellcasterElementConstructor<T> = new (
+  ...args: any[]
+) => SpellcasterElement & T;
+
+/**
+ * Create a custom element from a view function.
+ *
+ * Function must provide defaults for all props, since the element may not have
+ * values for those props defined.
+ */
+export const component = <P extends object>(
+  render: (
+    component: HTMLElement & Partial<P>,
+  ) => string | HTMLElement | DocumentFragment,
+  {
+    styles = [],
+  }: {
+    styles?: Array<CSSStyleSheet>;
+  } = {},
+) => {
+  class CustomSpellcasterElement extends SpellcasterElement {
+    styles = styles;
+
+    render(): string | HTMLElement | DocumentFragment {
+      return render(this as unknown as HTMLElement & Partial<P>);
+    }
+  }
+  return CustomSpellcasterElement as CustomSpellcasterElementConstructor<
+    Partial<P>
+  >;
+};

@@ -405,54 +405,6 @@ const Modal = (isHidden, children) => div(
 )
 ```
 
-### Web components
-
-Spellcaster Hyperscript also offers a lightweight helper class for defining Web Components:
-
-```js
-import { state } from "spellcaster/spellcaster.js";
-import { SpellcasterElement, css } from "spellcaster/hyperscript.js"
-
-class TitleElement extends SpellcasterElement {
-  styles = [
-    css`
-    :host {
-      display: block;
-    }
-
-    .title {
-      font-weight: bold;
-    }
-    `
-  ]
-
-  title = state("Untitled")
-
-  render() {
-    effect(() => {
-      console.log(`Title changed`, this.title());
-    });
-
-    return h('div', {className: 'title'}, text(this.title))
-  }
-}
-customElements.define("x-title", TitleElement);
-
-const element = h('x-title');
-document.append(element);
-```
-
-Like the rest of Spellcaster, `render` is typically called once to build the shadow DOM of the element and bind signals to specific places in the DOM. SpellcasterElement waits until you append the element to the DOM to call render, giving you an opportunity to reconfigure element signals:
-
-```js
-const title = state("Different title");
-
-const element2 = h('x-title', {
-  title
-});
-document.append(element2);
-```
-
 ### Dynamic lists
 
 What about rendering dynamic lists of children? For this, we can use `repeat(signal, view)`. It takes a signal of `Map<Key, Item>`, and will efficiently re-render children, updating, moving, or removing elements as needed, making the minimal number of DOM modifications.
@@ -465,3 +417,57 @@ const Todos = todos => div(
 ```
 
 With hyperscript, most of the DOM tree is static. Only dynamic properties, text, and `repeat()` are dynamic. This design approach is inspired by [SwiftUI](https://developer.apple.com/documentation/swiftui/list), and it makes DOM updates extremely efficient.
+
+### Web components
+
+Spellcaster Hyperscript also offers a lightweight helper that transforms any view function into a custom element:
+
+```js
+import { always } from "spellcaster/spellcaster.js";
+import { component, css } from "spellcaster/hyperscript.js"
+
+const styles = css`
+:host {
+  display: block;
+}
+`;
+
+const Hello = ({
+  hello = always("Hello world")
+}) => {
+  return h('div', {className: 'title'}, text(hello()))
+}
+
+customElements.define("x-hello", component(Hello, { styles }));
+```
+
+View functions that are registered as components receive the element instance as their props argument. Because the view props are an element instance, you must provide default values for all of their custom props. This is because the element instance may not have that property set. `always()` is a useful helper for default values. It creates a signal that never changes.
+
+To access the element instance, you can pass it in as a variable instead of destructuring:
+
+```js
+const Hello = (element) => {
+  const { hello } = element;
+  return h('div', {className: 'title'}, text(hello()))
+}
+```
+
+Like the rest of Spellcaster, the component's is called just once, to build the shadow DOM of the element and bind signals to specific places in the DOM. Components wait until you append the element to the DOM to call the view function, giving you an opportunity to set element properties before the view function is run.
+
+```js
+const [hello, setHello] = signal("Hello signals");
+
+// Set a signal to drive the element
+const helloElement = h('x-hello', { hello });
+
+// Build shadow DOM
+document.append(element);
+```
+
+You can also call `.build()` on the instance to trigger the Shadow DOM build manually. Build is idempotent, and will only run once per element.
+
+```js
+const helloElement2 = h('x-hello', { hello });
+// Manually trigger build
+helloElement.build();
+```
