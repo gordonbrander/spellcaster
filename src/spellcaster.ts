@@ -35,6 +35,16 @@ export const signal = <T>(initial: T): [Signal<T>, (value: T) => void] => {
 };
 
 /**
+ * Create a signal that holds a reference to its own setter.
+ */
+export const state = <T>(initial: T) => {
+  const state = new Signal.State(initial);
+  const get = () => state.get();
+  get.set = (value: T) => state.set(value);
+  return get;
+};
+
+/**
  * Create a computed signal
  * Computed sigal takes a zero-argument function, `compute` which may read
  * from any other signal to produce a value.

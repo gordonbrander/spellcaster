@@ -303,7 +303,7 @@ const update = (state, msg) => {
   }
 }
 
-const fx = msg => {
+const fx = (state, msg) => {
   switch (msg.type) {
   case 'fetchCount':
     return [fetchCount]
@@ -323,10 +323,10 @@ Store will perform each effect concurrently, and feed their resulting messages b
 
 ### Creating and combining middleware
 
-Store middleware is just a function that takes a send function and returns a send function, e.g.:
+Store middleware is just a higher-order function that takes a state and a send function and returns a send function, e.g.:
 
 ```typescript
-export type Middleware<Msg> = (send: (msg: Msg) => void) => (msg: Msg) => void
+export type Middleware<Msg> = (state: Signal<State>) => (send: (msg: Msg) => void) => (msg: Msg) => void
 ```
 
 This makes it easy to write your own middleware.
@@ -407,42 +407,51 @@ const Modal = (isHidden, children) => div(
 
 ### Web components
 
-Spellcaster Hyperscript also offers a lightweight way to define Web Components:
+Spellcaster Hyperscript also offers a lightweight helper class for defining Web Components:
 
 ```js
-import { component, css } from "spellcaster/hyperscript.js"
+import { state } from "spellcaster/spellcaster.js";
+import { SpellcasterElement, css } from "spellcaster/hyperscript.js"
 
-// Define component, returning a hyperscript function
-const Title = component({
-  tag: "x-title",
-  styles: () => [
+class TitleElement extends SpellcasterElement {
+  styles = [
     css`
     :host {
       display: block;
     }
+
+    .title {
+      font-weight: bold;
+    }
     `
-  ],
-  render: (title) => {
-    return h(
-      "h1",
-      { className: "title" },
-      text(title)
-    )
+  ]
+
+  title = state("Untitled")
+
+  render() {
+    effect(() => {
+      console.log(`Title changed`, this.title());
+    });
+
+    return h('div', {className: 'title'}, text(this.title))
   }
-})
+}
+customElements.define("x-title", TitleElement);
 
-const [title, setTitle] = signal("Hello Component!")
-
-// Create instance of component element
-const element = Title({
-  id: "title",
-  state: title
-})
+const element = h('x-title');
+document.append(element);
 ```
 
-All components defined with `component()` have a `state` property which can be used to set the component's state. `render()` is called whenever the `state` property is set, and the element returned by `render()` replaces the current contents of the shadow DOM. As with other elements in Spellcaster, this is typically done just once. You construct the element, passing in one or more signals, and let fine-grained reactivity handle the rest.
+Like the rest of Spellcaster, `render` is typically called once to build the shadow DOM of the element and bind signals to specific places in the DOM. SpellcasterElement waits until you append the element to the DOM to call render, giving you an opportunity to reconfigure element signals:
 
-If you want more control, you can also extend the underlying `SpellcasterElement` component class directly.
+```js
+const title = state("Different title");
+
+const element2 = h('x-title', {
+  title
+});
+document.append(element2);
+```
 
 ### Dynamic lists
 

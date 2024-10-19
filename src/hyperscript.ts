@@ -206,18 +206,28 @@ const setProps = (element: Node, props: Record<string, any>) => {
   }
 };
 
-const stylesheetCache = new Map<string, CSSStyleSheet>();
+const createStylesheetCache = () => {
+  const cache = new Map<string, CSSStyleSheet>();
 
-/** Get or create a cached stylesheet from a string */
-export const stylesheet = (cssString: string): CSSStyleSheet => {
-  if (stylesheetCache.has(cssString)) {
-    return stylesheetCache.get(cssString);
-  }
-  const sheet = new CSSStyleSheet();
-  sheet.replaceSync(cssString);
-  stylesheetCache.set(cssString, sheet);
-  return sheet;
+  /** Get or create a cached stylesheet from a string */
+  const stylesheet = (cssString: string): CSSStyleSheet => {
+    if (cache.has(cssString)) {
+      return cache.get(cssString);
+    }
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(cssString);
+    cache.set(cssString, sheet);
+    return sheet;
+  };
+
+  stylesheet.clearCache = () => {
+    cache.clear();
+  };
+
+  return stylesheet;
 };
+
+export const stylesheet = createStylesheetCache();
 
 /**
  * CSS template literal tag
@@ -234,14 +244,30 @@ export const css = (parts: TemplateStringsArray) => {
 /**
  * Custom element base for Spellcaster
  */
-export class SpellcasterElement<T> extends HTMLElement {
-  #state: T | undefined = undefined;
+export class SpellcasterElement extends HTMLElement {
+  #didBuild = false;
   #shadow: ShadowRoot;
 
   constructor() {
     super();
     this.#shadow = this.createShadow();
-    this.#shadow.adoptedStyleSheets = this.styles();
+    this.#shadow.adoptedStyleSheets = this.styles;
+  }
+
+  connectedCallback() {
+    this.build();
+  }
+
+  /**
+   * Build element Shadow DOM.
+   * Automatically invoked once, when element is first connected to the DOM.
+   * You may also invoke it yourself manually at any time to build or rebuild
+   * the Shadow DOM.
+   */
+  build() {
+    if (this.#didBuild) return;
+    this.#shadow.replaceChildren(this.render());
+    this.#didBuild = true;
   }
 
   /** Attach the shadow root for the element */
@@ -257,91 +283,11 @@ export class SpellcasterElement<T> extends HTMLElement {
    * Tip: use the `css` function as the tagging function for a template string to
    * create a CSSStyleSheet.
    */
-  styles(): CSSStyleSheet[] {
+  get styles(): CSSStyleSheet[] {
     return [];
   }
 
-  /**
-   * Build an element to replace the contents of the shadow DOM.
-   * Called whenever state is updated.
-   */
-  render(state: T): HTMLElement | DocumentFragment {
-    return new DocumentFragment();
-  }
-
-  get state(): T {
-    return this.#state;
-  }
-
-  /**
-   * Set element state.
-   * When used with signals, this is typically called once after element
-   * construction. Efficient updates to the shadow DOM are done via passing
-   * in one or more signals, and allowing fine-grained reactivity to update the
-   * element's DOM.
-   */
-  set state(state: T) {
-    if (this.#state !== state) {
-      this.#state = state;
-      this.#shadow.replaceChildren(this.render(state));
-    }
+  render(): HTMLElement | DocumentFragment | string {
+    return "";
   }
 }
-
-export type StatefulElement<T> = HTMLElement & { state: T };
-
-const noStyles = () => [];
-
-/**
- * Define and register a custom reactive element.
- * Returns a hyperscript function that creates an instance of the element.
- *
- * Calling `element.state = value` will rebuild the element's shadow DOM using
- * the `render()` function. This is typically done only once at construction,
- * and then signals are allowed to perform fine-grained updates from
- * there on.
- *
- * @example
- * const Foo = component({
- *   tag: 'x-foo',
- *   styles: () => [css(`h1 { color: red; }`)],
- *   render: (state) => {
- *     return div({}, text(() => state().title))
- *   }
- * });
- *
- * const state = signal({title: 'Hello, world!'});
- *
- * const fooEl = Foo({
- *   className: 'foo',
- *   state,
- * });
- */
-export const component = <T>({
-  tag,
-  styles = noStyles,
-  render,
-}: {
-  tag: string;
-  styles?: () => CSSStyleSheet[];
-  render: (state: T) => HTMLElement | DocumentFragment;
-}) => {
-  class CustomSpellcasterElement extends SpellcasterElement<T> {
-    styles() {
-      return styles();
-    }
-
-    render(state: T) {
-      return render(state);
-    }
-  }
-
-  customElements.define(tag, CustomSpellcasterElement);
-
-  const create = (
-    props: Props & { state: T },
-    configure?: ElementConfigurator,
-  ): StatefulElement<T> => h(tag, props, configure);
-
-  return create;
-};
