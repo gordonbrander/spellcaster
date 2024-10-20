@@ -423,7 +423,7 @@ With hyperscript, most of the DOM tree is static. Only dynamic properties, text,
 Spellcaster Hyperscript also offers a lightweight helper that transforms any view function into a custom element:
 
 ```js
-import { Signal, always } from "spellcaster/spellcaster.js";
+import { always } from "spellcaster/spellcaster.js";
 import { component, css } from "spellcaster/hyperscript.js";
 
 const styles = css`
@@ -432,11 +432,7 @@ const styles = css`
 }
 `;
 
-const Hello = ({
-  hello
-}: {
-  hello: Signal<string>
-}) => {
+const Hello = ({ hello }) => {
   return h('div', {className: 'title'}, text(hello()));
 };
 
