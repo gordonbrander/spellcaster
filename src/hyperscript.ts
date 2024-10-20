@@ -285,10 +285,19 @@ export class SpellcasterElement extends HTMLElement {
 }
 
 /**
- * Create a custom element from a view function.
+ * Create a custom element from a view rendering function.
+ * @example
+ * const Foo = component({
+ *   tag: 'x-foo',
+ *   styles: [css(`h1 { color: red; }`)],
+ *   props: { foo: always("") },
+ *   render: ({ foo }) => {
+ *     return div({}, text(foo))
+ *   }
+ * });
  *
- * Function must provide defaults for all props, since the element may not have
- * values for those props defined.
+ * const [foo, setFoo] = signal("Hello world!");
+ * const fooEl = h('x-foo', { foo });
  */
 export const component = <P extends object>({
   tag = undefined,
