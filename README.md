@@ -423,8 +423,8 @@ With hyperscript, most of the DOM tree is static. Only dynamic properties, text,
 Spellcaster Hyperscript also offers a lightweight helper that transforms any view function into a custom element:
 
 ```js
-import { always } from "spellcaster/spellcaster.js";
-import { component, css } from "spellcaster/hyperscript.js"
+import { Signal, always } from "spellcaster/spellcaster.js";
+import { component, css } from "spellcaster/hyperscript.js";
 
 const styles = css`
 :host {
@@ -433,17 +433,22 @@ const styles = css`
 `;
 
 const Hello = ({
-  hello = always("Hello world")
+  hello
+}: {
+  hello: Signal<string>
 }) => {
-  return h('div', {className: 'title'}, text(hello()))
-}
+  return h('div', {className: 'title'}, text(hello()));
+};
 
-customElements.define("x-hello", component(Hello, { styles }));
+component({
+  tag: 'x-hello',
+  styles,
+  props: { hello: always("Hello") },
+  render: Hello
+});
 ```
 
-View functions that are registered as components receive the element instance as their props argument. Because the view props are an element instance, you must provide default values for all of their custom props. This is because the element instance may not have that property set. `always()` is a useful helper for default values. It creates a signal that never changes.
-
-To access the element instance, you can pass it in as a variable instead of destructuring:
+View functions that are registered as components receive the element instance as their props argument. This allows you to modify the element and use the element's properties as the function's props. To access the element instance, you can pass it in as a variable instead of destructuring:
 
 ```js
 const Hello = (element) => {
@@ -452,10 +457,10 @@ const Hello = (element) => {
 }
 ```
 
-Like the rest of Spellcaster, the component's is called just once, to build the shadow DOM of the element and bind signals to specific places in the DOM. Components wait until you append the element to the DOM to call the view function, giving you an opportunity to set element properties before the view function is run.
+Like the rest of Spellcaster, the component's render function is called just once, to build the shadow DOM of the element and bind signals to specific places in the DOM. The component will wait until you append the element to the DOM to call the render function, giving you an opportunity to set element properties before the element shadow DOM is built.
 
 ```js
-const [hello, setHello] = signal("Hello signals");
+const [hello, setHello] = signal("Bonjour");
 
 // Set a signal to drive the element
 const helloElement = h('x-hello', { hello });
