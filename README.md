@@ -303,7 +303,7 @@ const update = (state, msg) => {
   }
 }
 
-const fx = msg => {
+const fx = (state, msg) => {
   switch (msg.type) {
   case 'fetchCount':
     return [fetchCount]
@@ -323,10 +323,10 @@ Store will perform each effect concurrently, and feed their resulting messages b
 
 ### Creating and combining middleware
 
-Store middleware is just a function that takes a send function and returns a send function, e.g.:
+Store middleware is just a higher-order function that takes a state and a send function and returns a send function, e.g.:
 
 ```typescript
-export type Middleware<Msg> = (send: (msg: Msg) => void) => (msg: Msg) => void
+export type Middleware<Msg> = (state: Signal<State>) => (send: (msg: Msg) => void) => (msg: Msg) => void
 ```
 
 This makes it easy to write your own middleware.
@@ -405,45 +405,6 @@ const Modal = (isHidden, children) => div(
 )
 ```
 
-### Web components
-
-Spellcaster Hyperscript also offers a lightweight way to define Web Components:
-
-```js
-import { component, css } from "spellcaster/hyperscript.js"
-
-// Define component, returning a hyperscript function
-const Title = component({
-  tag: "x-title",
-  styles: () => [
-    css`
-    :host {
-      display: block;
-    }
-    `
-  ],
-  render: (title) => {
-    return h(
-      "h1",
-      { className: "title" },
-      text(title)
-    )
-  }
-})
-
-const [title, setTitle] = signal("Hello Component!")
-
-// Create instance of component element
-const element = Title({
-  id: "title",
-  state: title
-})
-```
-
-All components defined with `component()` have a `state` property which can be used to set the component's state. `render()` is called whenever the `state` property is set, and the element returned by `render()` replaces the current contents of the shadow DOM. As with other elements in Spellcaster, this is typically done just once. You construct the element, passing in one or more signals, and let fine-grained reactivity handle the rest.
-
-If you want more control, you can also extend the underlying `SpellcasterElement` component class directly.
-
 ### Dynamic lists
 
 What about rendering dynamic lists of children? For this, we can use `repeat(signal, view)`. It takes a signal of `Map<Key, Item>`, and will efficiently re-render children, updating, moving, or removing elements as needed, making the minimal number of DOM modifications.
@@ -456,3 +417,58 @@ const Todos = todos => div(
 ```
 
 With hyperscript, most of the DOM tree is static. Only dynamic properties, text, and `repeat()` are dynamic. This design approach is inspired by [SwiftUI](https://developer.apple.com/documentation/swiftui/list), and it makes DOM updates extremely efficient.
+
+### Web components
+
+Spellcaster Hyperscript also offers a lightweight helper that transforms any view function into a custom element:
+
+```js
+import { always } from "spellcaster/spellcaster.js";
+import { component, css } from "spellcaster/hyperscript.js";
+
+const styles = css`
+:host {
+  display: block;
+}
+`;
+
+const Hello = ({ hello }) => {
+  return h('div', {className: 'title'}, text(hello()));
+};
+
+component({
+  tag: 'x-hello',
+  styles,
+  props: { hello: always("Hello") },
+  render: Hello
+});
+```
+
+View functions that are registered as components receive the element instance as their props argument. This allows you to modify the element and use the element's properties as the function's props. To access the element instance, you can pass it in as a variable instead of destructuring:
+
+```js
+const Hello = (element) => {
+  const { hello } = element;
+  return h('div', {className: 'title'}, text(hello()))
+}
+```
+
+Like the rest of Spellcaster, the component's render function is called just once, to build the shadow DOM of the element and bind signals to specific places in the DOM. The component will wait until you append the element to the DOM to call the render function, giving you an opportunity to set element properties before the element shadow DOM is built.
+
+```js
+const [hello, setHello] = signal("Bonjour");
+
+// Set a signal to drive the element
+const helloElement = h('x-hello', { hello });
+
+// Build shadow DOM
+document.append(element);
+```
+
+You can also call `.build()` on the instance to trigger the Shadow DOM build manually. Build is idempotent, and will only run once per element.
+
+```js
+const helloElement2 = h('x-hello', { hello });
+// Manually trigger build
+helloElement.build();
+```

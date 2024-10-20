@@ -48,6 +48,12 @@ export const computed = <T>(compute: Signal<T>) => {
   return get;
 };
 
+/** A signal that always returns the same value and never changes */
+export const always =
+  <T>(initial: T) =>
+  () =>
+    initial;
+
 /**
  * Given a zero-argument function, create a throttled version of that function
  * that will run only once per microtask.

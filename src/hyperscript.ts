@@ -1,4 +1,11 @@
-import { effect, takeValues, sample, Signal } from "./spellcaster.js";
+import {
+  effect,
+  takeValues,
+  sample,
+  Signal,
+  always,
+  signal,
+} from "./spellcaster.js";
 
 export { cid, getId, indexById, index, Identifiable } from "./util.js";
 
@@ -206,18 +213,28 @@ const setProps = (element: Node, props: Record<string, any>) => {
   }
 };
 
-const stylesheetCache = new Map<string, CSSStyleSheet>();
+const createStylesheetCache = () => {
+  const cache = new Map<string, CSSStyleSheet>();
 
-/** Get or create a cached stylesheet from a string */
-export const stylesheet = (cssString: string): CSSStyleSheet => {
-  if (stylesheetCache.has(cssString)) {
-    return stylesheetCache.get(cssString);
-  }
-  const sheet = new CSSStyleSheet();
-  sheet.replaceSync(cssString);
-  stylesheetCache.set(cssString, sheet);
-  return sheet;
+  /** Get or create a cached stylesheet from a string */
+  const stylesheet = (cssString: string): CSSStyleSheet => {
+    if (cache.has(cssString)) {
+      return cache.get(cssString);
+    }
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(cssString);
+    cache.set(cssString, sheet);
+    return sheet;
+  };
+
+  stylesheet.clearCache = () => {
+    cache.clear();
+  };
+
+  return stylesheet;
 };
+
+export const stylesheet = createStylesheetCache();
 
 /**
  * CSS template literal tag
@@ -234,14 +251,27 @@ export const css = (parts: TemplateStringsArray) => {
 /**
  * Custom element base for Spellcaster
  */
-export class SpellcasterElement<T> extends HTMLElement {
-  #state: T | undefined = undefined;
-  #shadow: ShadowRoot;
+export class SpellcasterElement extends HTMLElement {
+  static observedAttributes: Array<string> = [];
 
-  constructor() {
-    super();
+  #didBuild = false;
+  #shadow: ShadowRoot;
+  styles: Array<CSSStyleSheet> = [];
+
+  attributeChangedCallback(_key: string, _prev: string, _next: string) {}
+
+  /**
+   * Build element shadow DOM.
+   * Automatically invoked once, when element is first connected to the DOM.
+   * You can also invoke it yourself to build the shadow DOM manually.
+   * Build is idempotent and will only one once per element.
+   */
+  build() {
+    if (this.#didBuild) return;
     this.#shadow = this.createShadow();
-    this.#shadow.adoptedStyleSheets = this.styles();
+    this.#shadow.adoptedStyleSheets = this?.styles ?? [];
+    this.#shadow.replaceChildren(this.render());
+    this.#didBuild = true;
   }
 
   /** Attach the shadow root for the element */
@@ -249,99 +279,64 @@ export class SpellcasterElement<T> extends HTMLElement {
     return this.attachShadow({ mode: "closed" });
   }
 
-  /**
-   * Stylesheets for the shadow root to adopt
-   * Override this method, returning an array of CSSStyleSheets to style
-   * the shadow DOM.
-   *
-   * Tip: use the `css` function as the tagging function for a template string to
-   * create a CSSStyleSheet.
-   */
-  styles(): CSSStyleSheet[] {
-    return [];
-  }
-
-  /**
-   * Build an element to replace the contents of the shadow DOM.
-   * Called whenever state is updated.
-   */
-  render(state: T): HTMLElement | DocumentFragment {
-    return new DocumentFragment();
-  }
-
-  get state(): T {
-    return this.#state;
-  }
-
-  /**
-   * Set element state.
-   * When used with signals, this is typically called once after element
-   * construction. Efficient updates to the shadow DOM are done via passing
-   * in one or more signals, and allowing fine-grained reactivity to update the
-   * element's DOM.
-   */
-  set state(state: T) {
-    if (this.#state !== state) {
-      this.#state = state;
-      this.#shadow.replaceChildren(this.render(state));
-    }
+  render(): HTMLElement | DocumentFragment | string {
+    return "";
   }
 }
 
-export type StatefulElement<T> = HTMLElement & { state: T };
-
-const noStyles = () => [];
-
 /**
- * Define and register a custom reactive element.
- * Returns a hyperscript function that creates an instance of the element.
- *
- * Calling `element.state = value` will rebuild the element's shadow DOM using
- * the `render()` function. This is typically done only once at construction,
- * and then signals are allowed to perform fine-grained updates from
- * there on.
- *
+ * Create a custom element from a view rendering function.
  * @example
  * const Foo = component({
  *   tag: 'x-foo',
- *   styles: () => [css(`h1 { color: red; }`)],
- *   render: (state) => {
- *     return div({}, text(() => state().title))
+ *   styles: [css(`h1 { color: red; }`)],
+ *   props: { foo: always("") },
+ *   render: ({ foo }) => {
+ *     return div({}, text(foo))
  *   }
  * });
  *
- * const state = signal({title: 'Hello, world!'});
- *
- * const fooEl = Foo({
- *   className: 'foo',
- *   state,
- * });
+ * const [foo, setFoo] = signal("Hello world!");
+ * const fooEl = h('x-foo', { foo });
  */
-export const component = <T>({
-  tag,
-  styles = noStyles,
+export const component = <P extends object>({
+  tag = undefined,
+  styles = [],
+  attrs = {},
+  props,
   render,
 }: {
-  tag: string;
-  styles?: () => CSSStyleSheet[];
-  render: (state: T) => HTMLElement | DocumentFragment;
+  tag?: string | undefined;
+  styles?: Array<CSSStyleSheet>;
+  props: P;
+  attrs?: Record<string, (value: string) => any>;
+  render: (
+    component: HTMLElement & P,
+  ) => string | HTMLElement | DocumentFragment;
 }) => {
-  class CustomSpellcasterElement extends SpellcasterElement<T> {
-    styles() {
-      return styles();
+  const observedAttributes = Object.keys(attrs);
+
+  class CustomSpellcasterElement extends SpellcasterElement {
+    static observedAttributes = observedAttributes;
+    styles = styles;
+
+    attributeChangedCallback(key: string, _prev: string, next: string) {
+      if (Object.hasOwn(attrs, key)) {
+        const coerce = attrs[key];
+        this[key] = coerce(next);
+      }
     }
 
-    render(state: T) {
-      return render(state);
+    render(): string | HTMLElement | DocumentFragment {
+      return render(this as unknown as HTMLElement & P);
     }
   }
 
-  customElements.define(tag, CustomSpellcasterElement);
+  Object.assign(CustomSpellcasterElement.prototype, props);
 
-  const create = (
-    props: Props & { state: T },
-    configure?: ElementConfigurator,
-  ): StatefulElement<T> => h(tag, props, configure);
+  if (tag) customElements.define(tag, CustomSpellcasterElement);
 
-  return create;
+  return CustomSpellcasterElement as unknown as new (
+    ...args: any[]
+  ) => SpellcasterElement & P;
 };
