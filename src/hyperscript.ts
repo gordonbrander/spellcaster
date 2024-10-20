@@ -252,28 +252,24 @@ export const css = (parts: TemplateStringsArray) => {
  * Custom element base for Spellcaster
  */
 export class SpellcasterElement extends HTMLElement {
+  static observedAttributes: Array<string> = [];
+
   #didBuild = false;
   #shadow: ShadowRoot;
   styles: Array<CSSStyleSheet> = [];
 
-  constructor() {
-    super();
-    this.#shadow = this.createShadow();
-    this.#shadow.adoptedStyleSheets = this?.styles ?? [];
-  }
-
-  connectedCallback() {
-    this.build();
-  }
+  attributeChangedCallback(_key: string, _prev: string, _next: string) {}
 
   /**
-   * Build element Shadow DOM.
+   * Build element shadow DOM.
    * Automatically invoked once, when element is first connected to the DOM.
-   * You may also invoke it yourself manually to build the Shadow DOM before
-   * appending.
+   * You can also invoke it yourself to build the shadow DOM manually.
+   * Build is idempotent and will only one once per element.
    */
   build() {
     if (this.#didBuild) return;
+    this.#shadow = this.createShadow();
+    this.#shadow.adoptedStyleSheets = this?.styles ?? [];
     this.#shadow.replaceChildren(this.render());
     this.#didBuild = true;
   }
@@ -288,34 +284,50 @@ export class SpellcasterElement extends HTMLElement {
   }
 }
 
-type CustomSpellcasterElementConstructor<T> = new (
-  ...args: any[]
-) => SpellcasterElement & T;
-
 /**
  * Create a custom element from a view function.
  *
  * Function must provide defaults for all props, since the element may not have
  * values for those props defined.
  */
-export const component = <P extends object>(
+export const component = <P extends object>({
+  tag = undefined,
+  styles = [],
+  attrs = {},
+  props,
+  render,
+}: {
+  tag?: string | undefined;
+  styles?: Array<CSSStyleSheet>;
+  props: P;
+  attrs?: Record<string, (value: string) => any>;
   render: (
-    component: HTMLElement & Partial<P>,
-  ) => string | HTMLElement | DocumentFragment,
-  {
-    styles = [],
-  }: {
-    styles?: Array<CSSStyleSheet>;
-  } = {},
-) => {
+    component: HTMLElement & P,
+  ) => string | HTMLElement | DocumentFragment;
+}) => {
+  const observedAttributes = Object.keys(attrs);
+
   class CustomSpellcasterElement extends SpellcasterElement {
+    static observedAttributes = observedAttributes;
     styles = styles;
 
+    attributeChangedCallback(key: string, _prev: string, next: string) {
+      if (Object.hasOwn(attrs, key)) {
+        const coerce = attrs[key];
+        this[key] = coerce(next);
+      }
+    }
+
     render(): string | HTMLElement | DocumentFragment {
-      return render(this as unknown as HTMLElement & Partial<P>);
+      return render(this as unknown as HTMLElement & P);
     }
   }
-  return CustomSpellcasterElement as CustomSpellcasterElementConstructor<
-    Partial<P>
-  >;
+
+  Object.assign(CustomSpellcasterElement.prototype, props);
+
+  if (tag) customElements.define(tag, CustomSpellcasterElement);
+
+  return CustomSpellcasterElement as unknown as new (
+    ...args: any[]
+  ) => SpellcasterElement & P;
 };
