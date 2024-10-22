@@ -411,9 +411,9 @@ What about rendering dynamic lists of children? For this, we can use `repeat(sig
 
 ```js
 const Todos = todos => div(
-  {className: 'todos'},
+  { className: 'todos' },
   repeat(todos, Todo)
-)
+);
 ```
 
 With hyperscript, most of the DOM tree is static. Only dynamic properties, text, and `repeat()` are dynamic. This design approach is inspired by [SwiftUI](https://developer.apple.com/documentation/swiftui/list), and it makes DOM updates extremely efficient.
@@ -433,7 +433,7 @@ const styles = css`
 `;
 
 const Hello = ({ hello }) => {
-  return h('div', {className: 'title'}, text(hello()));
+  return h('div', { className: 'title' }, text(hello));
 };
 
 component({
@@ -449,8 +449,8 @@ View functions that are registered as components receive the element instance as
 ```js
 const Hello = (element) => {
   const { hello } = element;
-  return h('div', {className: 'title'}, text(hello()))
-}
+  return h('div', { className: 'title' }, text(hello));
+};
 ```
 
 Like the rest of Spellcaster, the component's render function is called just once, to build the shadow DOM of the element and bind signals to specific places in the DOM. The component will wait until you append the element to the DOM to call the render function, giving you an opportunity to set element properties before the element shadow DOM is built.
