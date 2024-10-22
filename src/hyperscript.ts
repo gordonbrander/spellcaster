@@ -253,22 +253,26 @@ export class SpellcasterElement extends HTMLElement {
 
   attributeChangedCallback(_key: string, _prev: string, _next: string) {}
 
+  connectedCallback() {
+    this.build();
+  }
+
+  /** Attach the shadow root for the element */
+  createShadow(): ShadowRoot {
+    return this.attachShadow({ mode: "closed" });
+  }
+
   /**
    * Build element shadow DOM.
    * Automatically invoked once, when element is first connected to the DOM.
    * You can also invoke it yourself to rebuild the shadow DOM.
    */
   build() {
-    if (this.#shadow == null) {
+    if (this.#shadow == undefined) {
       this.#shadow = this.createShadow();
       this.#shadow.adoptedStyleSheets = this?.styles ?? [];
     }
     this.#shadow.replaceChildren(this.render());
-  }
-
-  /** Attach the shadow root for the element */
-  createShadow(): ShadowRoot {
-    return this.attachShadow({ mode: "closed" });
   }
 
   render(): HTMLElement | DocumentFragment | string {
