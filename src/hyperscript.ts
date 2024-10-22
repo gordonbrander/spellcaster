@@ -254,8 +254,7 @@ export const css = (parts: TemplateStringsArray) => {
 export class SpellcasterElement extends HTMLElement {
   static observedAttributes: Array<string> = [];
 
-  #didBuild = false;
-  #shadow: ShadowRoot;
+  #shadow: ShadowRoot | undefined = undefined;
   styles: Array<CSSStyleSheet> = [];
 
   attributeChangedCallback(_key: string, _prev: string, _next: string) {}
@@ -263,15 +262,14 @@ export class SpellcasterElement extends HTMLElement {
   /**
    * Build element shadow DOM.
    * Automatically invoked once, when element is first connected to the DOM.
-   * You can also invoke it yourself to build the shadow DOM manually.
-   * Build is idempotent and will only one once per element.
+   * You can also invoke it yourself to rebuild the shadow DOM.
    */
   build() {
-    if (this.#didBuild) return;
-    this.#shadow = this.createShadow();
-    this.#shadow.adoptedStyleSheets = this?.styles ?? [];
+    if (this.#shadow == null) {
+      this.#shadow = this.createShadow();
+      this.#shadow.adoptedStyleSheets = this?.styles ?? [];
+    }
     this.#shadow.replaceChildren(this.render());
-    this.#didBuild = true;
   }
 
   /** Attach the shadow root for the element */

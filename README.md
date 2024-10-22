@@ -438,7 +438,7 @@ const Hello = ({ hello }) => {
 
 component({
   tag: 'x-hello',
-  styles,
+  styles: [baseStyles, styles],
   props: { hello: always("Hello") },
   render: Hello
 });
@@ -465,10 +465,12 @@ const helloElement = h('x-hello', { hello });
 document.append(element);
 ```
 
-You can also call `.build()` on the instance to trigger the Shadow DOM build manually. Build is idempotent, and will only run once per element.
+You can also call `.build()` on the instance to trigger the Shadow DOM build manually.
 
 ```js
-const helloElement2 = h('x-hello', { hello });
-// Manually trigger build
+const [hello2, setHello2] = signal("Hola");
+// Set a new signal
+helloElement.hello = hello2;
+// Re-build shadow dom, re-binding properties
 helloElement.build();
 ```
