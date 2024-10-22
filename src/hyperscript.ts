@@ -27,7 +27,7 @@ export const repeat =
       // Note that we must build a list of children to remove, since
       // removing in-place would change the live node list and bork iteration.
       const children = new Map();
-      const removes = [];
+      const removes: Array<Element> = [];
       for (const child of parent.children) {
         children.set(child[__key__], child);
         if (!states().has(child[__key__])) {
@@ -82,14 +82,14 @@ export const shadow =
   (...children: Array<HTMLElement | string>) =>
   (parent: HTMLElement) => {
     parent.attachShadow({ mode: "open" });
-    parent.shadowRoot.replaceChildren(...children);
+    parent.shadowRoot!.replaceChildren(...children);
   };
 
 /**
  * Write a value or signal of values to the text content of a parent element.
  * Value will be coerced to string. If nullish, will be coerced to empty string.
  */
-export const text = (text: Signal<any> | any) => (parent) =>
+export const text = (text: Signal<any> | any) => (parent: Node) =>
   effect(() => setProp(parent, "textContent", sample(text) ?? ""));
 
 const isArray = Array.isArray;
@@ -218,8 +218,9 @@ const createStylesheetCache = () => {
 
   /** Get or create a cached stylesheet from a string */
   const stylesheet = (cssString: string): CSSStyleSheet => {
-    if (cache.has(cssString)) {
-      return cache.get(cssString);
+    const cachedSheet = cache.get(cssString);
+    if (cachedSheet) {
+      return cachedSheet;
     }
     const sheet = new CSSStyleSheet();
     sheet.replaceSync(cssString);
