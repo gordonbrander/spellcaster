@@ -277,18 +277,25 @@ export class SpellcasterElement extends HTMLElement {
 }
 
 /**
- * Create a custom element from a view rendering function.
+ * Create a custom element from a view function.
  * @example
- * const Foo = component({
+ * const Foo = ({ foo }) => {
+ *   return div({}, text(foo));
+ * };
+ *
+ * component({
+ *   // Tag name to register
  *   tag: 'x-foo',
+ *   // Stylesheets to include
  *   styles: [css(`h1 { color: red; }`)],
- *   props: { foo: always("") },
- *   render: ({ foo }) => {
- *     return div({}, text(foo))
- *   }
+ *   // Default prop values
+ *   props: () => ({ foo: always("") }),
+ *   // View function to turn into component
+ *   render: Foo
  * });
  *
  * const [foo, setFoo] = signal("Hello world!");
+ * // Set new value for property
  * const fooEl = h('x-foo', { foo });
  */
 export const component = <P extends object>({
@@ -300,7 +307,7 @@ export const component = <P extends object>({
 }: {
   tag?: string | undefined;
   styles?: Array<CSSStyleSheet>;
-  props: P;
+  props: () => P;
   attrs?: Record<string, (value: string) => any>;
   render: (
     component: HTMLElement & P,
@@ -311,6 +318,11 @@ export const component = <P extends object>({
   class CustomSpellcasterElement extends SpellcasterElement {
     static observedAttributes = observedAttributes;
     styles = styles;
+
+    constructor() {
+      super();
+      Object.assign(this, props());
+    }
 
     attributeChangedCallback(key: string, _prev: string, next: string) {
       if (Object.hasOwn(attrs, key)) {
@@ -323,8 +335,6 @@ export const component = <P extends object>({
       return render(this as unknown as HTMLElement & P);
     }
   }
-
-  Object.assign(CustomSpellcasterElement.prototype, props);
 
   if (tag) customElements.define(tag, CustomSpellcasterElement);
 
