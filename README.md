@@ -464,13 +464,3 @@ const helloElement = h('x-hello', { hello });
 // Build shadow DOM
 document.append(element);
 ```
-
-You can also call `.build()` on the instance to trigger the Shadow DOM build manually.
-
-```js
-const [hello2, setHello2] = signal("Hola");
-// Set a new signal
-helloElement.hello = hello2;
-// Re-build shadow dom, re-binding properties
-helloElement.build();
-```
