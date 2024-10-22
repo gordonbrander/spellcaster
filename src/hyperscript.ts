@@ -1,11 +1,4 @@
-import {
-  effect,
-  takeValues,
-  sample,
-  Signal,
-  always,
-  signal,
-} from "./spellcaster.js";
+import { effect, takeValues, sample, Signal } from "./spellcaster.js";
 
 export { cid, getId, indexById, index, Identifiable } from "./util.js";
 
