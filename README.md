@@ -432,6 +432,8 @@ const styles = css`
 }
 `;
 
+const props = () => ({ hello: always("Hello") });
+
 const Hello = ({ hello }) => {
   return h('div', { className: 'title' }, text(hello));
 };
@@ -439,7 +441,7 @@ const Hello = ({ hello }) => {
 component({
   tag: 'x-hello',
   styles: [baseStyles, styles],
-  props: { hello: always("Hello") },
+  props,
   render: Hello
 });
 ```
