@@ -1,12 +1,13 @@
 {
-    "compilerOptions": {
-        "target": "ESNext",
-        "module": "NodeNext",
-        "outDir": "dist",
-        "esModuleInterop": true,
-        "declaration": true,
-        "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    },
-    "include": ["src"],
-    "exclude": ["node_modules", "examples"]
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "NodeNext",
+    "outDir": "dist",
+    "esModuleInterop": true,
+    "declaration": true,
+    "strictNullChecks": true,
+    "lib": ["ESNext", "DOM", "DOM.Iterable"]
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "examples"]
 }
