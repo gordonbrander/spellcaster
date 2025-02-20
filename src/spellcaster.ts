@@ -79,12 +79,13 @@ export const throttled = (
   return schedule;
 };
 
+export type Cancel = () => void;
+
 const watcher = new Signal.subtle.Watcher(
   throttled(() => {
     for (const signal of watcher.getPending()) {
       signal.get();
     }
-    watcher.watch();
   }),
 );
 
@@ -107,23 +108,19 @@ const watcher = new Signal.subtle.Watcher(
  * when an effect's lifecycle is tied to the lifecycle of a component or class,
  * and that component or class has a destructor.
  */
-export const effect = (perform: () => unknown) => {
-  let cleanup: any;
+export const effect = (perform: () => Cancel | void) => {
+  let cleanup: Cancel | undefined;
 
   const signal = new Signal.Computed(() => {
-    if (typeof cleanup === "function") {
-      cleanup();
-    }
-    cleanup = perform();
+    cleanup?.();
+    cleanup = perform() ?? undefined;
   });
 
   watcher.watch(signal);
   signal.get();
 
   const dispose = () => {
-    if (typeof cleanup === "function") {
-      cleanup();
-    }
+    cleanup?.();
     watcher.unwatch(signal);
   };
 

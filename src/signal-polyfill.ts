@@ -1,1 +1,1 @@
-export {Signal} from 'signal-polyfill'
+export { Signal } from "signal-polyfill";

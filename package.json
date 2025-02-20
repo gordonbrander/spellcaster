@@ -34,11 +34,11 @@
     "test": "./test"
   },
   "devDependencies": {
-    "esbuild": "^0.23.0",
+    "esbuild": "^0.25.0",
     "mocha": "^10.2.0",
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "signal-polyfill": "^0.1.0"
+    "signal-polyfill": "^0.2.0"
   }
 }
