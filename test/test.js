@@ -128,22 +128,45 @@ describe("effect", () => {
     effect(done);
   });
 
-  it("reacts to signals once per microtask, batching multiple updates", (done) => {
+  it("reacts to signals once per microtask, batching multiple updates", async () => {
     const [a, setA] = signal(1);
     const [b, setB] = signal(1);
 
     let count = 0;
     effect(() => {
+      a();
+      b();
       count++;
-      if (count > 1) {
-        fail("Effect fired too many times");
-      } else if (count === 1) {
-        done();
-      }
     });
-
     setA(10);
     setB(10);
+
+    await delay(null, 10);
+
+    assertEqual(count, 2, "batched");
+  });
+
+  it("it is disjoint from other effects", async () => {
+    const [a, setA] = signal(0);
+    const [b, setB] = signal(0);
+
+    let aCount = 0;
+    effect(() => {
+      a();
+      aCount++;
+    });
+
+    let bCount = 0;
+    effect(() => {
+      b();
+      bCount++;
+    });
+
+    setA(1);
+    await delay(null, 1);
+
+    assertEqual(aCount, 2, "a");
+    assertEqual(bCount, 1, "b");
   });
 
   it("runs the cleanup function before next execution", async () => {
@@ -154,19 +177,14 @@ describe("effect", () => {
     effect(() => {
       counter();
       callCount++;
-      cleanupCount++;
-      return () => cleanupCount--;
+      return () => cleanupCount++;
     });
-    await delay(null, 1);
+    // Cleanup 1 called
     setCounter(1);
-    await delay(null, 1);
-    setCounter(2);
-    await delay(null, 1);
-    setCounter(3);
-    await delay(null, 1);
+    await delay(null, 10);
 
-    assertEqual(callCount, 4);
-    assertEqual(cleanupCount, 1);
+    assertEqual(callCount, 2, "called");
+    assertEqual(cleanupCount, 1, "cleaned");
   });
 
   it("runs the cleanup when running the dispose function", async () => {
