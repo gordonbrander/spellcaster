@@ -86,6 +86,7 @@ const watcher = new Signal.subtle.Watcher(
     for (const signal of watcher.getPending()) {
       signal.get();
     }
+    watcher.watch();
   }),
 );
 

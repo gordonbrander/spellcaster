@@ -192,7 +192,11 @@ export const setProp = (element: Node, key: string, value: any) => {
     );
   }
 
-  if (element[key] !== value) {
+  if (key.includes("-") || key === "rel") {
+    if (element instanceof HTMLElement && element.getAttribute(key) !== value) {
+      element.setAttribute(key, value)
+    }
+  } else if (element[key] !== value) {
     element[key] = value;
   }
 };
