@@ -13,7 +13,9 @@ const Counter = () => {
         {
           className: 'counter-button',
           onclick: () => setCount(count() + 1),
-          "data-short-desc": "Increases the count by one each time you click this button."
+          attrs: {
+            "data-short-desc": "Increases the count by one each time you click this button."
+          }
         },
         text('Increment')
       )
