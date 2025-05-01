@@ -192,7 +192,12 @@ export const setProp = (element: Node, key: string, value: any) => {
     );
   }
 
-  if (element[key] !== value) {
+  if (key === "attrs" && typeof value === "object" && element instanceof HTMLElement) {
+    for (const [k, v] of Object.entries(value)) {
+      const value = typeof v === "string" ? v : (v as any).toString()
+      if (element.getAttribute(k) !== value) element.setAttribute(k, value);
+    }
+  } else if (element[key] !== value) {
     element[key] = value;
   }
 };
